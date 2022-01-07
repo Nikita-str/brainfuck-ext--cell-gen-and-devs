@@ -117,9 +117,10 @@ fn main() {
     bf_cell_gen::bfcg::emulators::win::Win::new(500, 200);
     
 
+    /* 
     loop {
         std::thread::sleep(std::time::Duration::from_millis(100));
         println!("H2");
     }
-
+    */
 }

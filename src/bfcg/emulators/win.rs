@@ -1,18 +1,39 @@
-use std::sync::Arc;
+use std::any::Any;
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use glium::Surface;
 
 use glutin::dpi::{Position, PhysicalPosition};
 use glutin::event::{Event, WindowEvent};
-use glutin::event_loop::{ControlFlow, EventLoop};
-use glutin::window::WindowBuilder;
+use glutin::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
+use glutin::window::{WindowBuilder, WindowId};
 use glutin::ContextBuilder;
 
 pub struct Win{
-    texture: Arc<glium::Texture2d>,
-    data: Vec<u8>,
+    need_redraw: Arc<AtomicBool>,
+    data: Arc<Mutex<Vec<u8>>>,
     width: u32,
     height: u32,
+}
+
+#[derive(Clone, Copy)]
+pub struct Color{
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl std::clone::Clone for Win{
+    fn clone(&self) -> Self {
+        Self { 
+            need_redraw: Arc::clone(&self.need_redraw), 
+            data: Arc::clone(&self.data), 
+            width: self.width, 
+            height: self.height, 
+        }
+    }
 }
 
 impl Win{
@@ -22,7 +43,20 @@ impl Win{
     const BORDER_2SZ: u32 = Self::BORDER_SZ * 2;
 
     fn get_width(&self) -> u32 { self.width }
-    fn get_height(&self) -> u32 { self.height}
+    fn get_height(&self) -> u32 { self.height }
+
+    fn clear_color(&mut self, color: Color){
+        let mut data = self.data.lock().unwrap();
+        for y in 0..self.height{
+            for x in 0..self.width {
+                    let ptr = 4 * (y * self.width + x) as usize;
+                    data[ptr + 0] = color.r;
+                    data[ptr + 1] = color.g;
+                    data[ptr + 2] = color.b;
+                    data[ptr + 3] = color.a;
+            }
+        }
+    }
 
     fn create_raw(data: &Vec<u8>, data_w: u32, data_h: u32) -> glium::texture::RawImage2d<u8> {
         glium::texture::RawImage2d{ 
@@ -33,19 +67,20 @@ impl Win{
         }
     }
 
-    fn draw_vec(&mut self, data: &Vec<u8>, x: u32, y: u32, data_w: u32, data_h: u32){
+    fn draw_vec(texture: &glium::Texture2d, data: &Vec<u8>, x: u32, y: u32, data_w: u32, data_h: u32){
         let raw = Self::create_raw(data, data_w, data_h);
 
-        self.texture.write(
+        texture.write(
             glium::Rect{left: x, bottom: y, width: data_w, height: data_h}, 
             raw
         );   
     }
 
-    fn inner_redraw(&mut self){
-        let raw = Self::create_raw(&self.data, self.width, self.height);
+    fn inner_redraw(&self, texture: &glium::Texture2d){
+        let data = self.data.lock().unwrap();
+        let raw = Self::create_raw(&data, self.width, self.height);
 
-        self.texture.write(
+        texture.write(
             glium::Rect{
                 left: Self::BORDER_SZ, 
                 bottom: Self::BORDER_SZ, 
@@ -56,7 +91,7 @@ impl Win{
         );   
     }
 
-    fn init_border_draw(&mut self, width: u32, height: u32){
+    fn init_border_draw(&mut self, texture: &glium::Texture2d, width: u32, height: u32){
         let big_width = width + Self::BORDER_2SZ;
         let big_height = height + Self::BORDER_2SZ;
         let mut line_x = Vec::<u8>::with_capacity(4 * big_width  as usize);
@@ -93,19 +128,19 @@ impl Win{
         //
         //but our screen already cleared by transparent color
     
-        self.draw_vec(&line_x, 0, 0, big_width, 1);
-        self.draw_vec(&line_x, 0, 2, big_width, 1);
-        self.draw_vec(&line_x, 0, big_height - 3, big_width, 1);
-        self.draw_vec(&line_x, 0, big_height - 1, big_width, 1);
+        Self::draw_vec(texture, &line_x, 0, 0, big_width, 1);
+        Self::draw_vec(texture, &line_x, 0, 2, big_width, 1);
+        Self::draw_vec(texture, &line_x, 0, big_height - 3, big_width, 1);
+        Self::draw_vec(texture, &line_x, 0, big_height - 1, big_width, 1);
 
-        self.draw_vec(&line_y, 0, 0, 1, big_height);
-        self.draw_vec(&line_y, 2, 0, 1, big_height);
-        self.draw_vec(&line_y, big_width - 3, 0, 1, big_height);
-        self.draw_vec(&line_y, big_width - 1, 0, 1, big_height);
+        Self::draw_vec(texture, &line_y, 0, 0, 1, big_height);
+        Self::draw_vec(texture, &line_y, 2, 0, 1, big_height);
+        Self::draw_vec(texture, &line_y, big_width - 3, 0, 1, big_height);
+        Self::draw_vec(texture, &line_y, big_width - 1, 0, 1, big_height);
 
-        self.draw_vec(&data, Self::BORDER_SZ, Self::BORDER_SZ, width, height);
+        Self::draw_vec(texture, &data, Self::BORDER_SZ, Self::BORDER_SZ, width, height);
 
-        self.data = data;
+        self.data = Arc::new(Mutex::new(data));
     }
 
     pub fn new(width: u32, height: u32) { Self::new_all(width, height, Self::STD_START_POS) }
@@ -114,13 +149,13 @@ impl Win{
         let width = width + Self::BORDER_2SZ;
         let height = height + Self::BORDER_2SZ;
 
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoop::<Event<()>>::with_user_event();
         let win = WindowBuilder::new()
             .with_title("[HARDWARE]:bf:screen")
             .with_decorations(false).with_transparent(true)
             .with_position(Position::Physical(PhysicalPosition::new(pos.0 as i32, pos.1 as i32)))
             .with_inner_size(glutin::dpi::PhysicalSize::new(width, height));
-    
+     
         let ctx = ContextBuilder::new();
         let display = glium::Display::new(win, ctx, &event_loop).unwrap();
     
@@ -135,43 +170,50 @@ impl Win{
         let width = width - Self::BORDER_2SZ;
         let height = height - Self::BORDER_2SZ;
         
-        let mut ret = Self{ 
-            texture: Arc::new(texture),
-            data: Vec::<u8>::new(),
+        let need_redraw = Arc::new(AtomicBool::new(true));
+        let mut thread_win = Self{
+            need_redraw,
+            data: Arc::new(Mutex::new(vec![])),
             width,
             height,
         };
 
-        ret.init_border_draw(width, height);
-
-        let texture = Arc::clone(&ret.texture);
-
-        /*
-        let width = width - 10;
-        let height = height - 10;
-        let mut data = Vec::<u8>::with_capacity(4 * (width * height) as usize);
-        for y in 0..height{
-            for x in 0..width {
-                data.push(0x7F);
-                data.push(0x00);
-                data.push(0x00);
-                data.push(0xFF);
-            }
-        }
-        let raw = glium::texture::RawImage2d{ 
-            data: std::borrow::Cow::Borrowed( &data ),
-            width: width,
-            height: height,
-            format: glium::texture::ClientFormat::U8U8U8U8,
-        };
-        texture.write(glium::Rect{left: 5, bottom: 5, width: width, height: height}, raw);
-        */
         
+        let id = display.gl_window().window().id();
+        thread_win.init_border_draw(&texture, width, height);
+        let proxy = event_loop.create_proxy();
+
+        let inner_win = thread_win.clone();
+
+        std::thread::spawn(move||{
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(2500));
+                thread_win.clear_color(Color{r: 0x00, g: 0xFF, b: 0x00, a: 0xFF});
+                thread_win.need_redraw.store(true, Ordering::Relaxed);
+                let event = Event::RedrawRequested(id);
+                proxy.send_event(event);
+                
+                std::thread::sleep(std::time::Duration::from_millis(2500));
+                thread_win.clear_color(Color{r: 0xFF, g: 0x00, b: 0x00, a: 0xFF});
+                thread_win.need_redraw.store(true, Ordering::Relaxed);
+                let event = Event::RedrawRequested(id);
+                proxy.send_event(event);
+            }
+        });
+
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
-            
-            
-            println!("H++");
+
+            //println!("need redraw = {}", inner_win.need_redraw.load(Ordering::Relaxed));
+            if inner_win.need_redraw.load(Ordering::Relaxed) {
+                inner_win.inner_redraw(&texture);
+                let frame = display.draw();
+                texture
+                    .as_surface()
+                    .fill(&frame, glium::uniforms::MagnifySamplerFilter::Nearest);
+                frame.finish().unwrap();
+                inner_win.need_redraw.store(false, Ordering::Relaxed);
+            }
 
             match event {
                 Event::LoopDestroyed => return,
@@ -180,6 +222,7 @@ impl Win{
                     _ => (),
                 },
                 Event::RedrawRequested(_) => {
+                    inner_win.inner_redraw(&texture);
                     let frame = display.draw();
                     texture
                         .as_surface()
