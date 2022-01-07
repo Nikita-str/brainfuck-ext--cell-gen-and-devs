@@ -1,0 +1,12 @@
+[package]
+name = "bf_cell_gen"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# winit = "0.26.1"
+# sdl2 = "0.35.1"
+glutin = "0.28.0"
+glium = "0.31.0"
