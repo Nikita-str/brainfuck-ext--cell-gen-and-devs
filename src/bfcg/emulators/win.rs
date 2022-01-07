@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -15,6 +14,13 @@ pub struct Win{
     data: Arc<Mutex<Vec<u8>>>,
     width: u32,
     height: u32,
+    drawer: Option<DrawThreadWin>,
+}
+
+struct DrawThreadWin{
+    can_thread_draw: bool,
+    proxy: EventLoopProxy<Event<'static, ()>>,
+    id: WindowId,
 }
 
 #[derive(Clone, Copy)]
@@ -32,6 +38,7 @@ impl std::clone::Clone for Win{
             data: Arc::clone(&self.data), 
             width: self.width, 
             height: self.height, 
+            drawer: None,
         }
     }
 }
@@ -39,13 +46,47 @@ impl std::clone::Clone for Win{
 impl Win{
     const STD_START_POS: (u32, u32) = (200, 300);
 
+    const WAIT_MS: u64 = 10;
+
     const BORDER_SZ: u32 = 5;
     const BORDER_2SZ: u32 = Self::BORDER_SZ * 2;
 
-    fn get_width(&self) -> u32 { self.width }
-    fn get_height(&self) -> u32 { self.height }
+    
+    fn get_mut_drawer(&mut self) -> &mut DrawThreadWin { self.drawer.as_mut().unwrap() }
+    fn with_drawer(&self) -> bool{ self.drawer.is_some() }
+    fn can_thread_draw(&self) -> bool{ self.with_drawer() && self.drawer.as_ref().unwrap().can_thread_draw }
 
-    fn clear_color(&mut self, color: Color){
+    pub fn get_width(&self) -> u32 { self.width }
+    pub fn get_height(&self) -> u32 { self.height }
+
+    pub fn start_draw_frame(&mut self) -> bool{
+        if !self.with_drawer() { return false }
+        while self.need_redraw.load(Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_millis(Self::WAIT_MS));
+        }
+        self.get_mut_drawer().can_thread_draw = true;
+        true
+    }
+
+    pub fn end_draw_frame(&mut self) -> bool{
+        if !self.with_drawer() { return false }
+        
+        self.get_mut_drawer().can_thread_draw = false;
+        self.need_redraw.store(true, Ordering::Relaxed); 
+        
+        let drawer = self.get_mut_drawer();    
+        let event = Event::RedrawRequested(drawer.id);
+        if drawer.proxy.send_event(event).is_err() {
+            false
+        } else {
+            true
+        } 
+    }
+
+    pub fn clear_color(&mut self, color: Color){
+        if !self.can_thread_draw() {
+            panic!("cant draw"); // TODO: return as bad result (false)
+        }
         let mut data = self.data.lock().unwrap();
         for y in 0..self.height{
             for x in 0..self.width {
@@ -170,34 +211,33 @@ impl Win{
         let width = width - Self::BORDER_2SZ;
         let height = height - Self::BORDER_2SZ;
         
-        let need_redraw = Arc::new(AtomicBool::new(true));
         let mut thread_win = Self{
-            need_redraw,
+            need_redraw: Arc::new(AtomicBool::new(true)),
             data: Arc::new(Mutex::new(vec![])),
             width,
             height,
+            drawer: None,
         };
 
         
-        let id = display.gl_window().window().id();
         thread_win.init_border_draw(&texture, width, height);
-        let proxy = event_loop.create_proxy();
-
         let inner_win = thread_win.clone();
+
+        let id = display.gl_window().window().id();
+        let proxy = event_loop.create_proxy();
+        thread_win.drawer = Some(DrawThreadWin{ can_thread_draw: false, id, proxy });
 
         std::thread::spawn(move||{
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(2500));
+                thread_win.start_draw_frame();
                 thread_win.clear_color(Color{r: 0x00, g: 0xFF, b: 0x00, a: 0xFF});
-                thread_win.need_redraw.store(true, Ordering::Relaxed);
-                let event = Event::RedrawRequested(id);
-                proxy.send_event(event);
+                thread_win.end_draw_frame();
                 
                 std::thread::sleep(std::time::Duration::from_millis(2500));
+                thread_win.start_draw_frame();
                 thread_win.clear_color(Color{r: 0xFF, g: 0x00, b: 0x00, a: 0xFF});
-                thread_win.need_redraw.store(true, Ordering::Relaxed);
-                let event = Event::RedrawRequested(id);
-                proxy.send_event(event);
+                thread_win.end_draw_frame();
             }
         });
 
