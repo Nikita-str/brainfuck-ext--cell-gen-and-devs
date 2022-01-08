@@ -84,6 +84,8 @@ impl Win{
     }
 
     pub fn clear_color(&mut self, color: Color){
+        // for test only
+
         if !self.can_thread_draw() {
             panic!("cant draw"); // TODO: return as bad result (false)
         }
@@ -97,6 +99,22 @@ impl Win{
                     data[ptr + 3] = color.a;
             }
         }
+    }
+
+    pub fn set_pixel(&mut self, x: u32, y: u32, color: Color){
+        let mut data = self.data.lock().unwrap();
+        let ptr = 4 * (y * self.width + x) as usize;
+        if color.a == 0 { 
+            data[ptr + 0] = 0;
+            data[ptr + 1] = 0;
+            data[ptr + 2] = 0;
+            data[ptr + 3] = 0;
+        } else { 
+            data[ptr + 0] = color.r;
+            data[ptr + 1] = color.g;
+            data[ptr + 2] = color.b;
+            data[ptr + 3] = 0xFF;
+        };
     }
 
     fn create_raw(data: &Vec<u8>, data_w: u32, data_h: u32) -> glium::texture::RawImage2d<u8> {
@@ -244,7 +262,6 @@ impl Win{
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
-            //println!("need redraw = {}", inner_win.need_redraw.load(Ordering::Relaxed));
             if inner_win.need_redraw.load(Ordering::Relaxed) {
                 inner_win.inner_redraw(&texture);
                 let frame = display.draw();
