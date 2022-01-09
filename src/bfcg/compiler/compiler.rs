@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 use std::str::Chars;
 
 use super::cmd_compiler::CmdCompiler;
-use super::compiler_error::CompilerError;
+use super::compiler_error::{CompilerError, CompilerErrorType};
 use super::compiler_option::CompilerOption;
 use super::compiler_pos::CompilerPos;
 
@@ -40,14 +40,14 @@ pub fn file_minimalize(str: &str) -> Result<String, ()>{
 
 struct InnerCompilerParam<'a>{
     chars: Chars<'a>,
-    pos: CompilerPos<'a>,
+    pos: CompilerPos,
 }
 
 impl<'a> InnerCompilerParam<'a>{
-    pub fn new(chars: Chars<'a>, file_name: &'a str) -> Self{ 
+    pub fn new(chars: Chars<'a>) -> Self{ 
         Self {
             chars,
-            pos: CompilerPos::new(file_name),
+            pos: CompilerPos::new(),
         }
     }
 
@@ -173,17 +173,19 @@ fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
     SharpParse::Macros{ macro_name, macro_cmds }
 }
 
+type CE = CompilerError;
+
 // TODO: type of error insted of (); if return None => no errors
 pub fn compile<CC, T>(file_name: String, mut option: CompilerOption<CC, T>) -> Result<CompilerInfo<T>, CompilerError>
 where CC: CmdCompiler<T>,
 {
     let file_as_string = std::fs::read_to_string(&file_name);
-    if file_as_string.is_err() { return Err(()) }
+    if file_as_string.is_err() { return Err(CompilerError::new_file_open_err(file_name)) }
     let file_as_string = file_as_string.unwrap();
     let chars = file_as_string.chars();
 
     let mut ret = CompilerInfo::new();
-    let mut param = InnerCompilerParam::new(chars, &file_name);
+    let mut param = InnerCompilerParam::new(chars);
 
     loop {
         match param.next() {
@@ -200,30 +202,31 @@ where CC: CmdCompiler<T>,
 
             Some(super::compiler::SHARP) => { 
                 match parse_sharp(&mut param) {
-                    SharpParse::EmptyName => return Err(()),
-                    SharpParse::UnexpectedEOF => return Err(()),
+                    SharpParse::EmptyName => return Err(CE::new_empty_name(param.get_pos(), file_name)),
+                    SharpParse::UnexpectedEOF => return Err(CE::new_unexp_eof(param.get_pos(), file_name)),
                     SharpParse::Temp(_) => panic!("here must not be temp"),
                     SharpParse::FileInclude(include) => {
                         let include_compile = compile(include, CompilerOption::<CC, T>::new_only_macro());
-                        let include_compile = if include_compile.is_err() { 
-                            return Err(())  
+                        let include_compile = if let Err(mut err) = include_compile { 
+                            err.add_err_pos(param.get_pos(), file_name);
+                            return Err(err)
                         } else {
                             include_compile.ok().unwrap()
                         };
                         if !ret.add_include_file(include_compile) {
-                            return Err(())
+                            return Err(CE::new_already_defined(param.get_pos(), file_name))
                         }
                     }
                     SharpParse::Macros{ macro_name, macro_cmds } => {
                         if !ret.add_macro(macro_name, macro_cmds) {
-                            return Err(())
+                            return Err(CE::new_already_defined(param.get_pos(), file_name))
                         }
                     }
                 }
             }
 
             Some(_) if option.only_macros => {
-                return Err(()) 
+                return Err(CE::new_code_in_macros(param.get_pos(), file_name)) 
             }
 
             Some(super::compiler::SETTINGS_CHAR) => {
@@ -236,8 +239,9 @@ where CC: CmdCompiler<T>,
 
             Some(c) => {
                 let cc = &mut option.cmd_compiler;
-                if let Some(_err) = cc.as_mut().unwrap().cmd_compile(c, param.get_pos()){
-                    return Err(())
+                if let Some(mut err) = cc.as_mut().unwrap().cmd_compile(c, param.get_pos()){
+                    err.add_err_pos(param.get_pos(), file_name);
+                    return Err(err)
                 }
             }
         }
