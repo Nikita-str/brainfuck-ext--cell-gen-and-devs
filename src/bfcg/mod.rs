@@ -1,2 +1,3 @@
-pub mod emulators;
-pub mod parser;
+pub mod dev_emulators;
+pub mod compiler;
+pub mod vm;
