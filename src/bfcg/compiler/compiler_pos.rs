@@ -1,14 +1,15 @@
 
-pub struct CompilerPos<'a>{
+#[derive(Clone)]
+pub struct CompilerPos{
     pub line: usize,
     pub symb: usize,
 
-    pub file_name: Option<&'a str>,
+    pub file_name: Option<String>,
 }
 
-impl<'a> CompilerPos<'a>{
+impl CompilerPos{
     pub fn new_wo_name() -> Self { Self{ line: 1, symb: 1, file_name: None } }
-    pub fn new(file_name: &'a str) -> Self { Self{ line: 1, symb: 1, file_name: Some(file_name) } }
+    pub fn new(file_name: String) -> Self { Self{ line: 1, symb: 1, file_name: Some(file_name) } }
 
     pub fn maybe_add_char(&mut self, c: Option<char>) {
         match c {

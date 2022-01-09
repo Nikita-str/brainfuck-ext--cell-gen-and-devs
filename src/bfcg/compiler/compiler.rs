@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::Chars;
 
+use super::cmd_compiler::CmdCompiler;
 use super::compiler_option::CompilerOption;
 use super::compiler_pos::CompilerPos;
 
@@ -38,11 +39,11 @@ pub fn file_minimalize(str: &str) -> Result<String, ()>{
 
 struct InnerCompilerParam<'a>{
     chars: Chars<'a>,
-    pos: CompilerPos<'a>,
+    pos: CompilerPos,
 }
 
 impl<'a> InnerCompilerParam<'a>{
-    pub fn new(chars: Chars<'a>, file_name: &'a str) -> Self{ 
+    pub fn new(chars: Chars<'a>, file_name: String) -> Self{ 
         Self {
             chars,
             pos: CompilerPos::new(file_name),
@@ -54,6 +55,8 @@ impl<'a> InnerCompilerParam<'a>{
         self.pos.maybe_add_char(c);
         c
     }
+
+    pub fn get_pos(&self) -> CompilerPos { self.pos.clone() }
 }
 
 pub struct CompilerInfo<T>{
@@ -61,6 +64,32 @@ pub struct CompilerInfo<T>{
     program: Vec<T>,
     devs: HashMap<usize, String>, // map port to dev name
     macros: HashMap<String, String>, // map name of macros to code
+}
+
+impl<T> CompilerInfo<T>{
+    pub fn new() -> Self { 
+        Self {
+            mem_init: None,
+            program: vec![],
+            devs: HashMap::new(),
+            macros: HashMap::new(),
+        }
+    }
+
+    pub fn add_macro(&mut self, macro_name: String, macro_cmds: String) -> bool {
+        if self.macros.contains_key(&macro_name) { false }
+        else {  
+            self.macros.insert(macro_name, macro_cmds);
+            true
+        }
+    }
+
+    pub fn add_include_file(&mut self, include: Self) -> bool {
+        for (macro_name, macro_cmds) in include.macros {
+            if !self.add_macro(macro_name, macro_cmds) { return false }
+        }
+        true
+    }
 }
 
 pub(super) const MACRO_USE_CHAR: char = '%';
@@ -144,16 +173,20 @@ fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
 }
 
 // TODO: type of error insted of (); if return None => no errors
-pub fn compile(file_name: &str, option: CompilerOption) -> Result<(), ()>{
-    let file_as_string = std::fs::read_to_string(file_name);
+pub fn compile<CC, T>(file_name: String, option: CompilerOption<CC, T>) -> Result<CompilerInfo<T>, ()>
+where CC: CmdCompiler<T>,
+{
+    let file_as_string = std::fs::read_to_string(&file_name);
     if file_as_string.is_err() { return Err(()) }
     let file_as_string = file_as_string.unwrap();
-    let mut chars = file_as_string.chars();
+    let chars = file_as_string.chars();
 
+    let mut ret = CompilerInfo::new();
     let mut param = InnerCompilerParam::new(chars, file_name);
 
     loop {
         let c = param.next();
+        // TODO: match c
 
         if c.is_none() {
             //TODO
@@ -162,7 +195,10 @@ pub fn compile(file_name: &str, option: CompilerOption) -> Result<(), ()>{
         let c = c.unwrap();
         if c == super::compiler::COMMENT_LINE { 
             skip_line(&mut param); 
+            continue;
         }
+
+        if c.is_whitespace() { continue }
 
         if c == super::compiler::SHARP { 
             match parse_sharp(&mut param) {
@@ -170,16 +206,31 @@ pub fn compile(file_name: &str, option: CompilerOption) -> Result<(), ()>{
                 SharpParse::UnexpectedEOF => return Err(()),
                 SharpParse::Temp(_) => panic!("here must not be temp"),
                 SharpParse::FileInclude(include) => {
-                    todo!("TODO")
+                    let include_compile = compile(include, CompilerOption::<CC, T>::new_only_macro());
+                    let include_compile = if include_compile.is_err() { 
+                        return Err(())  
+                    } else {
+                        include_compile.ok().unwrap()
+                    };
+                    if !ret.add_include_file(include_compile) {
+                        return Err(())
+                    }
                 }
                 SharpParse::Macros{ macro_name, macro_cmds } => {
-                    todo!("check that not new macro & add it")
+                    if !ret.add_macro(macro_name, macro_cmds) {
+                        return Err(())
+                    }
                 }
             }
+            continue;
+        }
+
+        if option.only_macros {
+            return Err(()) 
         }
 
         // TODO: parse : [STOP HERE]
     }
 
-    Ok(())
+    Ok(ret)
 }
