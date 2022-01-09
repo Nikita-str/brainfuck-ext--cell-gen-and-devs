@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::str::Chars;
 
 use super::cmd_compiler::CmdCompiler;
@@ -77,6 +75,26 @@ impl<T> CompilerInfo<T>{
         }
     }
 
+    pub fn macro_transform(&self, macro_init_code: String) -> Result<String, String> {
+        let mut macro_code = String::new();
+
+        let macro_splited: Vec<&str> = macro_init_code.split('%').collect();
+        let mut part_is_macro = false;
+        for code_part in macro_splited {
+            if part_is_macro {
+                macro_code += code_part;
+            } else {
+                let name = code_part;
+                let code_part = self.get_macros_code(name);
+                if code_part.is_none() { return Err(name.to_owned()) } 
+                macro_code += code_part.unwrap();
+            }
+            part_is_macro = !part_is_macro;
+        }
+
+        Ok(macro_code)
+    }
+
     pub fn add_macro(&mut self, macro_name: String, macro_cmds: String) -> bool {
         if self.macros.contains_key(&macro_name) { false }
         else {  
@@ -116,6 +134,7 @@ fn skip_line(param: &mut InnerCompilerParam){
 enum SharpParse{
     UnexpectedEOF,
     EmptyName,
+    BadMacroName(char),
     FileInclude(String),
     Macros{macro_name: String, macro_cmds: String},
 
@@ -128,12 +147,13 @@ impl SharpParse{
 
     fn to_file_include(self) -> Self { 
         match self {
-            Self::UnexpectedEOF | Self::EmptyName | Self::FileInclude(_) => self,
+            Self::BadMacroName(_) | Self::UnexpectedEOF | Self::EmptyName | Self::FileInclude(_) => self,
             Self::Temp(s) => Self::FileInclude(s),
             Self::Macros{ .. } => panic!("macro can't transform into include"), 
         }
     }
 }
+
 
 fn parse_until_char(param: &mut InnerCompilerParam, first_char: Option<char>, until_char: char) -> Option<String>{
     let mut ret_str = String::new();
@@ -166,6 +186,7 @@ fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
         match param.next() {
             None => { return SharpParse::UnexpectedEOF }
             Some(super::compiler::COMMENT_LINE) => { skip_line(param) },
+            Some(super::compiler::MACRO_USE_CHAR) => { return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) },
             Some(c) if c.is_whitespace() => { },
             Some(ok) => { c = Some(ok); break },
         };
@@ -178,6 +199,9 @@ fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
     let macro_name =
     if !macro_name.is_temp() { return macro_name } 
     else { macro_name.temp_to_string().unwrap() };
+    if macro_name.contains(super::compiler::MACRO_USE_CHAR) { 
+        return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) 
+    }
 
     let macro_cmds =  parse_until_sharp(param, None);
     let macro_cmds =
@@ -221,6 +245,7 @@ where CC: CmdCompiler<T>,
                 match parse_sharp(&mut param) {
                     SharpParse::EmptyName => return Err(CE::new_empty_name(param.get_pos(), file_name)),
                     SharpParse::UnexpectedEOF => return Err(CE::new_unexp_eof(param.get_pos(), file_name)),
+                    SharpParse::BadMacroName(bad_char) => return Err(CE::new_bad_macro_name(param.get_pos(), file_name, bad_char)),
                     SharpParse::Temp(_) => panic!("here must not be temp"),
                     SharpParse::FileInclude(include) => {
                         let include_compile = compile(include, CompilerOption::<CC, T>::new_only_macro());
@@ -235,7 +260,11 @@ where CC: CmdCompiler<T>,
                         }
                     }
                     SharpParse::Macros{ macro_name, macro_cmds } => {
-                        if !ret.add_macro(macro_name, macro_cmds) {
+                        let macro_code = ret.macro_transform(macro_cmds);
+                        let macro_code = if let Ok(macro_code) = macro_code { macro_code }
+                        else { return Err(CE::new_unknown_macros(param.get_pos(), file_name, macro_code.err().unwrap())) };
+
+                        if !ret.add_macro(macro_name, macro_code) {
                             return Err(CE::new_already_defined(param.get_pos(), file_name))
                         }
                     }

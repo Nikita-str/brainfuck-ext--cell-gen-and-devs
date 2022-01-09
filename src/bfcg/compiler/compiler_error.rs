@@ -13,6 +13,7 @@ pub enum CompilerErrorType{
     
     EmptyFileName,
     EmptyMacroName,
+    BadMacroName(char),
     MacroAlreadyDefined,
     CodeInMacros,
     UnknownMacros(String),
@@ -49,6 +50,9 @@ impl CompilerError{
     new_ce_2p!(new_unexp_eof, CET::UnexpectedEOF);
     pub fn new_unknown_macros(pos: CompilerPos, file_name: String, macros_name: String) -> Self { 
         Self::new(CET::UnknownMacros(macros_name), pos, file_name) 
+    }
+    pub fn new_bad_macro_name(pos: CompilerPos, file_name: String, bad_char: char) -> Self { 
+        Self::new(CET::BadMacroName(bad_char), pos, file_name) 
     }
 
     pub fn new_wo_pos(err_type: CompilerErrorType, file_name: String) -> Self{
