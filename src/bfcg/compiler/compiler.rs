@@ -4,6 +4,7 @@ use std::io::{BufRead, BufReader};
 use std::str::Chars;
 
 use super::cmd_compiler::CmdCompiler;
+use super::compiler_error::CompilerError;
 use super::compiler_option::CompilerOption;
 use super::compiler_pos::CompilerPos;
 
@@ -39,11 +40,11 @@ pub fn file_minimalize(str: &str) -> Result<String, ()>{
 
 struct InnerCompilerParam<'a>{
     chars: Chars<'a>,
-    pos: CompilerPos,
+    pos: CompilerPos<'a>,
 }
 
 impl<'a> InnerCompilerParam<'a>{
-    pub fn new(chars: Chars<'a>, file_name: String) -> Self{ 
+    pub fn new(chars: Chars<'a>, file_name: &'a str) -> Self{ 
         Self {
             chars,
             pos: CompilerPos::new(file_name),
@@ -173,7 +174,7 @@ fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
 }
 
 // TODO: type of error insted of (); if return None => no errors
-pub fn compile<CC, T>(file_name: String, option: CompilerOption<CC, T>) -> Result<CompilerInfo<T>, ()>
+pub fn compile<CC, T>(file_name: String, mut option: CompilerOption<CC, T>) -> Result<CompilerInfo<T>, CompilerError>
 where CC: CmdCompiler<T>,
 {
     let file_as_string = std::fs::read_to_string(&file_name);
@@ -182,54 +183,64 @@ where CC: CmdCompiler<T>,
     let chars = file_as_string.chars();
 
     let mut ret = CompilerInfo::new();
-    let mut param = InnerCompilerParam::new(chars, file_name);
+    let mut param = InnerCompilerParam::new(chars, &file_name);
 
     loop {
-        let c = param.next();
-        // TODO: match c
+        match param.next() {
+            None => {
+                //TODO !!!!
 
-        if c.is_none() {
-            //TODO
-        }
+                break
+            }
+            Some(super::compiler::COMMENT_LINE) => { 
+                skip_line(&mut param); 
+            }
 
-        let c = c.unwrap();
-        if c == super::compiler::COMMENT_LINE { 
-            skip_line(&mut param); 
-            continue;
-        }
+            Some(c) if c.is_whitespace() => { }
 
-        if c.is_whitespace() { continue }
-
-        if c == super::compiler::SHARP { 
-            match parse_sharp(&mut param) {
-                SharpParse::EmptyName => return Err(()),
-                SharpParse::UnexpectedEOF => return Err(()),
-                SharpParse::Temp(_) => panic!("here must not be temp"),
-                SharpParse::FileInclude(include) => {
-                    let include_compile = compile(include, CompilerOption::<CC, T>::new_only_macro());
-                    let include_compile = if include_compile.is_err() { 
-                        return Err(())  
-                    } else {
-                        include_compile.ok().unwrap()
-                    };
-                    if !ret.add_include_file(include_compile) {
-                        return Err(())
+            Some(super::compiler::SHARP) => { 
+                match parse_sharp(&mut param) {
+                    SharpParse::EmptyName => return Err(()),
+                    SharpParse::UnexpectedEOF => return Err(()),
+                    SharpParse::Temp(_) => panic!("here must not be temp"),
+                    SharpParse::FileInclude(include) => {
+                        let include_compile = compile(include, CompilerOption::<CC, T>::new_only_macro());
+                        let include_compile = if include_compile.is_err() { 
+                            return Err(())  
+                        } else {
+                            include_compile.ok().unwrap()
+                        };
+                        if !ret.add_include_file(include_compile) {
+                            return Err(())
+                        }
                     }
-                }
-                SharpParse::Macros{ macro_name, macro_cmds } => {
-                    if !ret.add_macro(macro_name, macro_cmds) {
-                        return Err(())
+                    SharpParse::Macros{ macro_name, macro_cmds } => {
+                        if !ret.add_macro(macro_name, macro_cmds) {
+                            return Err(())
+                        }
                     }
                 }
             }
-            continue;
-        }
 
-        if option.only_macros {
-            return Err(()) 
-        }
+            Some(_) if option.only_macros => {
+                return Err(()) 
+            }
 
-        // TODO: parse : [STOP HERE]
+            Some(super::compiler::SETTINGS_CHAR) => {
+                todo!("todo")
+            }
+
+            Some(super::compiler::MACRO_USE_CHAR) => {
+                todo!("todo")
+            }
+
+            Some(c) => {
+                let cc = &mut option.cmd_compiler;
+                if let Some(_err) = cc.as_mut().unwrap().cmd_compile(c, param.get_pos()){
+                    return Err(())
+                }
+            }
+        }
     }
 
     Ok(ret)
