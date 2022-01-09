@@ -1,0 +1,12 @@
+
+; proof of sugarity 0:
+#0#[-]#
+
+; change %X% to X
+; you may test others program with change 0 into %0%:
+
+'dis-all-dev'              ; disconnect all devices
+'dev[console]:num-console'   ; connect console that out cell value in decimal form
+
++++>+ %0% < %0% .>. 
+,. %0% .

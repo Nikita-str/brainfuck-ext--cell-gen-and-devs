@@ -1,5 +1,11 @@
 use super::compiler_pos::{ExtCompilerPos, CompilerPos};
 
+pub enum CompilerErrorUnexpEOF{
+    NotClosedInclude,
+    NotClosedMacro,
+    NotClosedUseMacro,
+}
+
 pub enum CompilerErrorType{
     FileOpenError,
 
@@ -9,6 +15,7 @@ pub enum CompilerErrorType{
     EmptyMacroName,
     MacroAlreadyDefined,
     CodeInMacros,
+    UnknownMacros(String),
 
     NotClosedWhile,
     ClosedWhileWithoutOpen,
@@ -40,6 +47,9 @@ impl CompilerError{
     new_ce_2p!(new_code_in_macros, CET::CodeInMacros);
     new_ce_2p!(new_empty_name, CET::EmptyFileName);
     new_ce_2p!(new_unexp_eof, CET::UnexpectedEOF);
+    pub fn new_unknown_macros(pos: CompilerPos, file_name: String, macros_name: String) -> Self { 
+        Self::new(CET::UnknownMacros(macros_name), pos, file_name) 
+    }
 
     pub fn new_wo_pos(err_type: CompilerErrorType, file_name: String) -> Self{
         if err_type.need_pos() { panic!("this error need pos!") }

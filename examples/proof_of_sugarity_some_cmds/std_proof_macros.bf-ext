@@ -1,0 +1,11 @@
+
+; in comment {_} is cell on which stay ptr
+
+; (stay on A;)
+#cloneAtoB#     ; {A}B 
+   >[-] c<<     ; {A}00
+   [->+>+<<]    ; {0}AA
+   >>[-<<+>>]   ; AA{0}
+   d<           ; AA
+#
+

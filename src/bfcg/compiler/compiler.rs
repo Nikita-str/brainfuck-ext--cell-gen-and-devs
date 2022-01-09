@@ -91,6 +91,11 @@ impl<T> CompilerInfo<T>{
         }
         true
     }
+
+    pub fn get_macros_code(&self, macro_name: &str) -> Option<&str> {
+        if let Some(code) = self.macros.get(macro_name) { Some(code) }
+        else { None }
+    }
 }
 
 pub(super) const MACRO_USE_CHAR: char = '%';
@@ -130,24 +135,33 @@ impl SharpParse{
     }
 }
 
-fn parse_until_sharp(param: &mut InnerCompilerParam) -> SharpParse{
+fn parse_until_char(param: &mut InnerCompilerParam, first_char: Option<char>, until_char: char) -> Option<String>{
     let mut ret_str = String::new();
+    if let Some(x) = first_char { ret_str.push(x); }
     loop {
-        let c = match param.next() {
-            None => { return SharpParse::UnexpectedEOF }
+        match param.next() {
+            None => { return None }
             Some(super::compiler::COMMENT_LINE) => skip_line(param),
-            Some(super::compiler::SHARP) => { break },
+            Some(c) if c == until_char => { break },
             Some(c) if c.is_whitespace() => { },
             Some(c) => { ret_str.push(c); },
-        };        
+        };
     }
+    
+    Some(ret_str)
+}
 
+fn parse_until_sharp(param: &mut InnerCompilerParam, first_char: Option<char>) -> SharpParse{
+    let ret_str = parse_until_char(param, first_char, super::compiler::SHARP);
+    if let None = ret_str { return SharpParse::UnexpectedEOF }
+
+    let ret_str = ret_str.unwrap();
     if ret_str.len() == 0 { SharpParse::EmptyName }
     else { SharpParse::Temp(ret_str) }
 }
 
 fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
-    let mut c = None;
+    let c;
     loop {
         match param.next() {
             None => { return SharpParse::UnexpectedEOF }
@@ -158,14 +172,14 @@ fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
     }
     let c = c.unwrap(); // must always ok; but if in loop exist algo error => exception
 
-    if c == super::compiler::SHARP { return SharpParse::to_file_include(parse_until_sharp(param)) }
+    if c == super::compiler::SHARP { return SharpParse::to_file_include(parse_until_sharp(param, None)) }
         
-    let macro_name =  parse_until_sharp(param);
+    let macro_name =  parse_until_sharp(param, Some(c));
     let macro_name =
     if !macro_name.is_temp() { return macro_name } 
     else { macro_name.temp_to_string().unwrap() };
 
-    let macro_cmds =  parse_until_sharp(param);
+    let macro_cmds =  parse_until_sharp(param, None);
     let macro_cmds =
     if !macro_cmds.is_temp() { return macro_cmds } 
     else { macro_cmds.temp_to_string().unwrap() };
@@ -190,9 +204,12 @@ where CC: CmdCompiler<T>,
     loop {
         match param.next() {
             None => {
-                //TODO !!!!
-
-                break
+                if !option.only_macros {
+                    let program = option.cmd_compiler.unwrap().get_program();
+                    if let Err(err) = program { return Err(err) } //TODO: file_name!
+                    else { ret.program = program.ok().unwrap(); }
+                }
+                return Ok(ret)
             }
             Some(super::compiler::COMMENT_LINE) => { 
                 skip_line(&mut param); 
@@ -234,18 +251,34 @@ where CC: CmdCompiler<T>,
             }
 
             Some(super::compiler::MACRO_USE_CHAR) => {
+                let macros_name = parse_until_char(&mut param, None, super::compiler::MACRO_USE_CHAR);
+                if let Some(macros_name) = macros_name {
+                    let macros_code = ret.get_macros_code(&macros_name);
+                    if macros_code.is_none() { 
+                        return Err(CE::new_unknown_macros(param.get_pos(), file_name, macros_name)) 
+                    } else {
+                        let macros_code = macros_code.unwrap().chars();
+                        let cc = option.cmd_compiler.as_mut().unwrap();
+                        for c in macros_code {
+                            if let Some(mut err) = cc.cmd_compile(c, param.get_pos()){
+                                err.add_err_pos(param.get_pos(), file_name);
+                                return Err(err)
+                            }                            
+                        }
+                    }
+                } else {
+                    return Err(CE::new_unexp_eof(param.get_pos(), file_name))
+                }
                 todo!("todo")
             }
 
             Some(c) => {
-                let cc = &mut option.cmd_compiler;
-                if let Some(mut err) = cc.as_mut().unwrap().cmd_compile(c, param.get_pos()){
+                let cc = option.cmd_compiler.as_mut().unwrap();
+                if let Some(mut err) = cc.cmd_compile(c, param.get_pos()){
                     err.add_err_pos(param.get_pos(), file_name);
                     return Err(err)
                 }
             }
         }
     }
-
-    Ok(ret)
 }

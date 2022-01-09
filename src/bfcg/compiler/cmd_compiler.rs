@@ -1,12 +1,9 @@
-use glium::texture::InternalFormatType;
-
 use super::{valid_cmd::ValidCMD, compiler_pos::CompilerPos, compiler_error::CompilerError};
 
 pub trait CmdCompiler<T>{
     fn cmd_compile(&mut self, cmd: char, pos: CompilerPos) -> Option<CompilerError>; // cause mut self => real cmd may look like "xyz" | "i" | "use" | "arch" | "btw"
 
-    fn can_program_ended(&self) -> bool;
-    fn get_program(self) -> Vec<T>;
+    fn get_program(self) -> Result<Vec<T>, CompilerError>;
 }
 
 
@@ -31,6 +28,8 @@ impl CmdCompiler<ValidCMD> for InterpreterCmdCompiler{
         todo!("----")
     }
 
-    fn can_program_ended(&self) -> bool { self.open_while.len() == 0 }
-    fn get_program(self) -> Vec<ValidCMD> { self.program }
+    fn get_program(self) -> Result<Vec<ValidCMD>, CompilerError> { 
+        if self.open_while.len() == 0 { Ok(self.program) }
+        else { todo!("Err") } 
+    }
 }

@@ -1,0 +1,11 @@
+
+##std_proof_macros#
+
+'dis-all-dev'                ; disconnect all devices
+'dev[console]:num-console'   ; connect console that out cell value in decimal form
+
+; [ in: {A} | out: {A<<1} ]
+#*# c< %cloneAtoB% [-<+>] d#
+
+,. %*% .
+   
