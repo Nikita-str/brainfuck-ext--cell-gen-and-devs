@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::str::Chars;
 
 use crate::bfcg::compiler::dif_part_helper::settings::Setting;
+use crate::bfcg::vm::port::Port;
 
 use super::cmd_compiler::CmdCompiler;
 use super::compiler_error::{CompilerError, CompilerErrorType};
@@ -60,22 +61,42 @@ impl<'a> InnerCompilerParam<'a>{
     pub fn get_pos(&self) -> CompilerPos { self.pos.clone() }
 }
 
+#[derive(Debug)]
 pub struct CompilerInfo<T>{
-    mem_init: Option<Vec<u8>>,
+    mem_init: Vec<u8>,
     program: Vec<T>,
-    devs: HashMap<usize, String>, // map port to dev name
+    port_names: HashMap<String, usize>,
+    devs: HashMap<Port, String>, // map port to dev name
     macros: HashMap<String, String>, // map name of macros to code
 }
 
 impl<T> CompilerInfo<T>{
     pub fn new() -> Self { 
         Self {
-            mem_init: None,
+            mem_init: vec![],
             program: vec![],
+            port_names: HashMap::new(), 
             devs: HashMap::new(),
             macros: HashMap::new(),
         }
     }
+
+    pub fn clear_port_names(&mut self) { self.port_names.clear() }
+    pub fn get_port(&self, port_name: &str) -> Option<usize> { self.port_names.get(port_name).cloned() }
+
+    /// ## Result
+    /// if already exist port for this name => return Some(prev_value)
+    /// else => return None
+    pub fn add_port(&mut self, port_name: String, port: usize) -> Option<usize> { self.port_names.insert(port_name, port) }
+
+    pub fn add_dev(&mut self, port: Port, dev_name: String) -> Option<String> { self.devs.insert(port, dev_name) }
+    pub fn get_devs(&self) -> &HashMap<Port, String> { &self.devs }
+    pub fn get_mut_devs(&mut self) -> &mut HashMap<Port, String> { &mut self.devs }
+
+    pub fn get_mem_init(&self) -> &Vec<u8> { &self.mem_init }
+    pub fn get_mut_mem_init(&mut self) -> &mut Vec<u8> { &mut self.mem_init }
+
+    pub fn is_empty_mem_init(&self) -> bool { self.mem_init.is_empty() }
 
     /// general form of macro: #macro_name#macro_code#
     /// 
@@ -293,7 +314,12 @@ where CC: CmdCompiler<T>,
                     if let Some(setting) = setting { setting } 
                     else { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) };
                 
-                let setting = Setting::prepare_settings(&setting);
+                match Setting::prepare_settings(&setting) {
+                    Err(error) => return Err(CE::new_setting_error(param.get_pos(), file_name, error)),
+                    Ok(setting) => {
+                        todo!("todo")
+                    }
+                }
 
                 todo!("todo")
             }

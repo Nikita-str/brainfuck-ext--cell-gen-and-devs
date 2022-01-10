@@ -1,28 +1,30 @@
 
 
-pub(in crate::bfcg::compiler)
-struct Setting{ pub params: Vec<SettingOneParam>, }
+pub struct Setting{ 
+    pub params: Vec<SettingOneParam>, 
+}
+
+impl Setting{
+    pub fn len(&self) -> usize { self.params.len() }
+}
 
 
-pub(in crate::bfcg::compiler)
-struct SettingOneParam{
+pub struct SettingOneParam{
     pub param: String,
     pub additional_params: Vec<String>,
 }
 
 impl SettingOneParam{
-    pub fn new(param: String, additional_params: Vec<String>) -> Self { Self { param, additional_params } }
+    fn new(param: String, additional_params: Vec<String>) -> Self { Self { param, additional_params } }
 }
 
 
-pub(in crate::bfcg::compiler)
-struct ErrorSetting{
+pub struct ErrorSetting{
     pub param: String,
     pub error: ErrorSettingHelper,
 }
 
-pub(in crate::bfcg::compiler)
-enum ErrorSettingHelper{
+pub enum ErrorSettingHelper{
     ClosedBeforeOpen,    // "not]hehe["        ! ] is wrong
     TwiceAdditional,     // "xx[not][hehe]"    ! [hehe] is wrong
     EmptyParam,          // "[not;hehe]"       ! nothing before [] is wrong
@@ -76,7 +78,8 @@ impl Setting{
         Ok(SettingOneParam::new(main_param, additional))
     }
 
-    pub fn prepare_settings(setting: &str) -> Result<Self, ErrorSetting>{
+    pub(in crate::bfcg::compiler) 
+    fn prepare_settings(setting: &str) -> Result<Self, ErrorSetting>{
         let split = setting.split(":");
         let mut setting_params = vec![];
         for part in split {

@@ -1,4 +1,4 @@
-use super::compiler_pos::{ExtCompilerPos, CompilerPos};
+use super::{compiler_pos::{ExtCompilerPos, CompilerPos}, dif_part_helper::settings::ErrorSetting};
 
 pub enum CompilerErrorUnexpEOF{
     NotClosedInclude,
@@ -20,6 +20,8 @@ pub enum CompilerErrorType{
 
     NotClosedWhile,
     ClosedWhileWithoutOpen,
+
+    SettingError(ErrorSetting),
 }
 
 impl CompilerErrorType{
@@ -53,6 +55,9 @@ impl CompilerError{
     }
     pub fn new_bad_macro_name(pos: CompilerPos, file_name: String, bad_char: char) -> Self { 
         Self::new(CET::BadMacroName(bad_char), pos, file_name) 
+    }
+    pub fn new_setting_error(pos: CompilerPos, file_name: String, error: ErrorSetting) -> Self { 
+        Self::new(CET::SettingError(error), pos, file_name) 
     }
 
     pub fn new_wo_pos(err_type: CompilerErrorType, file_name: String) -> Self{
