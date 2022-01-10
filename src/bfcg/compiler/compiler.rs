@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::str::Chars;
 
+use crate::bfcg::compiler::dif_part_helper::settings::Setting;
+
 use super::cmd_compiler::CmdCompiler;
 use super::compiler_error::{CompilerError, CompilerErrorType};
 use super::compiler_option::CompilerOption;
@@ -286,6 +288,13 @@ where CC: CmdCompiler<T>,
             }
 
             Some(super::compiler::SETTINGS_CHAR) => {
+                let setting = parse_until_char(&mut param, None, super::compiler::SETTINGS_CHAR);
+                let setting = 
+                    if let Some(setting) = setting { setting } 
+                    else { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) };
+                
+                let setting = Setting::prepare_settings(&setting);
+
                 todo!("todo")
             }
 
