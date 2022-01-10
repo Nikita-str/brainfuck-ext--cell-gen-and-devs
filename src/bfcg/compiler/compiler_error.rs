@@ -9,7 +9,7 @@ pub enum CompilerErrorUnexpEOF{
 pub enum CompilerErrorType{
     FileOpenError,
 
-    UnexpectedEOF,
+    UnexpectedEOF, // TODO: {await_close: [CompilerErrorUnexpEOF | char], pos_open: CompilerPos}
     
     EmptyFileName,
     EmptyMacroName,

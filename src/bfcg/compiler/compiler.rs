@@ -75,13 +75,24 @@ impl<T> CompilerInfo<T>{
         }
     }
 
+    /// general form of macro: #macro_name#macro_code#
+    /// 
+    /// general form of macro call: %macro_name%
+    /// 
+    /// this function take macro code and when in it 
+    /// other macro call substitute instead name their code
+    /// 
+    /// ## Result
+    /// * if all name known => Ok(macro_code (without inner calls))
+    /// * else => Err(name of unknown macros)
     pub fn macro_transform(&self, macro_init_code: String) -> Result<String, String> {
         let mut macro_code = String::new();
 
         let macro_splited: Vec<&str> = macro_init_code.split('%').collect();
-        let mut part_is_macro = false;
+        let mut part_is_macro_name = false;
+
         for code_part in macro_splited {
-            if part_is_macro {
+            if !part_is_macro_name {
                 macro_code += code_part;
             } else {
                 let name = code_part;
@@ -89,7 +100,7 @@ impl<T> CompilerInfo<T>{
                 if code_part.is_none() { return Err(name.to_owned()) } 
                 macro_code += code_part.unwrap();
             }
-            part_is_macro = !part_is_macro;
+            part_is_macro_name = !part_is_macro_name;
         }
 
         Ok(macro_code)
@@ -131,6 +142,22 @@ fn skip_line(param: &mut InnerCompilerParam){
     }
 }
 
+fn parse_until_char(param: &mut InnerCompilerParam, first_char: Option<char>, until_char: char) -> Option<String>{
+    let mut ret_str = String::new();
+    if let Some(x) = first_char { ret_str.push(x); }
+    loop {
+        match param.next() {
+            None => { return None }
+            Some(super::compiler::COMMENT_LINE) => skip_line(param),
+            Some(c) if c == until_char => { break },
+            Some(c) if c.is_whitespace() => { },
+            Some(c) => { ret_str.push(c); },
+        };
+    }
+    
+    Some(ret_str)
+}
+
 enum SharpParse{
     UnexpectedEOF,
     EmptyName,
@@ -152,63 +179,46 @@ impl SharpParse{
             Self::Macros{ .. } => panic!("macro can't transform into include"), 
         }
     }
-}
 
+    fn parse_until_sharp(param: &mut InnerCompilerParam, first_char: Option<char>) -> SharpParse{
+        let ret_str = parse_until_char(param, first_char, super::compiler::SHARP);
+        if let None = ret_str { return SharpParse::UnexpectedEOF }
 
-fn parse_until_char(param: &mut InnerCompilerParam, first_char: Option<char>, until_char: char) -> Option<String>{
-    let mut ret_str = String::new();
-    if let Some(x) = first_char { ret_str.push(x); }
-    loop {
-        match param.next() {
-            None => { return None }
-            Some(super::compiler::COMMENT_LINE) => skip_line(param),
-            Some(c) if c == until_char => { break },
-            Some(c) if c.is_whitespace() => { },
-            Some(c) => { ret_str.push(c); },
-        };
-    }
-    
-    Some(ret_str)
-}
-
-fn parse_until_sharp(param: &mut InnerCompilerParam, first_char: Option<char>) -> SharpParse{
-    let ret_str = parse_until_char(param, first_char, super::compiler::SHARP);
-    if let None = ret_str { return SharpParse::UnexpectedEOF }
-
-    let ret_str = ret_str.unwrap();
-    if ret_str.len() == 0 { SharpParse::EmptyName }
-    else { SharpParse::Temp(ret_str) }
-}
-
-fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
-    let c;
-    loop {
-        match param.next() {
-            None => { return SharpParse::UnexpectedEOF }
-            Some(super::compiler::COMMENT_LINE) => { skip_line(param) },
-            Some(super::compiler::MACRO_USE_CHAR) => { return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) },
-            Some(c) if c.is_whitespace() => { },
-            Some(ok) => { c = Some(ok); break },
-        };
-    }
-    let c = c.unwrap(); // must always ok; but if in loop exist algo error => exception
-
-    if c == super::compiler::SHARP { return SharpParse::to_file_include(parse_until_sharp(param, None)) }
-        
-    let macro_name =  parse_until_sharp(param, Some(c));
-    let macro_name =
-    if !macro_name.is_temp() { return macro_name } 
-    else { macro_name.temp_to_string().unwrap() };
-    if macro_name.contains(super::compiler::MACRO_USE_CHAR) { 
-        return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) 
+        let ret_str = ret_str.unwrap();
+        if ret_str.len() == 0 { SharpParse::EmptyName }
+        else { SharpParse::Temp(ret_str) }
     }
 
-    let macro_cmds =  parse_until_sharp(param, None);
-    let macro_cmds =
-    if !macro_cmds.is_temp() { return macro_cmds } 
-    else { macro_cmds.temp_to_string().unwrap() };
+    fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
+        let c;
+        loop {
+            match param.next() {
+                None => { return SharpParse::UnexpectedEOF }
+                Some(super::compiler::COMMENT_LINE) => { skip_line(param) },
+                Some(super::compiler::MACRO_USE_CHAR) => { return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) },
+                Some(c) if c.is_whitespace() => { },
+                Some(ok) => { c = Some(ok); break },
+            };
+        }
+        let c = c.unwrap(); // must always ok; but if in loop exist algo error => exception
 
-    SharpParse::Macros{ macro_name, macro_cmds }
+        if c == super::compiler::SHARP { return SharpParse::to_file_include(Self::parse_until_sharp(param, None)) }
+            
+        let macro_name = Self::parse_until_sharp(param, Some(c));
+        let macro_name =
+        if !macro_name.is_temp() { return macro_name } 
+        else { macro_name.temp_to_string().unwrap() };
+        if macro_name.contains(super::compiler::MACRO_USE_CHAR) { 
+            return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) 
+        }
+
+        let macro_cmds = Self::parse_until_sharp(param, None);
+        let macro_cmds =
+        if !macro_cmds.is_temp() { return macro_cmds } 
+        else { macro_cmds.temp_to_string().unwrap() };
+
+        SharpParse::Macros{ macro_name, macro_cmds }
+    }
 }
 
 type CE = CompilerError;
@@ -242,7 +252,7 @@ where CC: CmdCompiler<T>,
             Some(c) if c.is_whitespace() => { }
 
             Some(super::compiler::SHARP) => { 
-                match parse_sharp(&mut param) {
+                match SharpParse::parse_sharp(&mut param) {
                     SharpParse::EmptyName => return Err(CE::new_empty_name(param.get_pos(), file_name)),
                     SharpParse::UnexpectedEOF => return Err(CE::new_unexp_eof(param.get_pos(), file_name)),
                     SharpParse::BadMacroName(bad_char) => return Err(CE::new_bad_macro_name(param.get_pos(), file_name, bad_char)),
@@ -298,7 +308,6 @@ where CC: CmdCompiler<T>,
                 } else {
                     return Err(CE::new_unexp_eof(param.get_pos(), file_name))
                 }
-                todo!("todo")
             }
 
             Some(c) => {
