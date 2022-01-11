@@ -23,4 +23,9 @@ impl Port{
         else if Self::right_port_name(port) { Self::Name(port.to_owned()) }
         else { panic!("wrong port name") } 
     }
+
+    pub fn to_name(self) -> String {
+        if let Self::Name(x) = self { x }
+        else { panic!("port is not name") }
+    }
 }

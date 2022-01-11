@@ -5,9 +5,10 @@ use crate::bfcg::compiler::dif_part_helper::settings::Setting;
 use crate::bfcg::vm::port::Port;
 
 use super::cmd_compiler::CmdCompiler;
-use super::compiler_error::{CompilerError, CompilerErrorType};
+use super::compiler_error::{CompilerError};
 use super::compiler_option::CompilerOption;
 use super::compiler_pos::CompilerPos;
+use super::mem_init::MemInit;
 
 pub fn file_minimalize(str: &str) -> Result<String, ()>{
     let mut comment_until_next_line = false;
@@ -63,7 +64,7 @@ impl<'a> InnerCompilerParam<'a>{
 
 #[derive(Debug)]
 pub struct CompilerInfo<T>{
-    mem_init: Vec<u8>,
+    mem_init: MemInit,
     program: Vec<T>,
     port_names: HashMap<String, usize>,
     devs: HashMap<Port, String>, // map port to dev name
@@ -73,7 +74,7 @@ pub struct CompilerInfo<T>{
 impl<T> CompilerInfo<T>{
     pub fn new() -> Self { 
         Self {
-            mem_init: vec![],
+            mem_init: MemInit::new(),
             program: vec![],
             port_names: HashMap::new(), 
             devs: HashMap::new(),
@@ -93,8 +94,8 @@ impl<T> CompilerInfo<T>{
     pub fn get_devs(&self) -> &HashMap<Port, String> { &self.devs }
     pub fn get_mut_devs(&mut self) -> &mut HashMap<Port, String> { &mut self.devs }
 
-    pub fn get_mem_init(&self) -> &Vec<u8> { &self.mem_init }
-    pub fn get_mut_mem_init(&mut self) -> &mut Vec<u8> { &mut self.mem_init }
+    pub fn get_mem_init(&self) -> &MemInit { &self.mem_init }
+    pub fn get_mut_mem_init(&mut self) -> &mut MemInit { &mut self.mem_init }
 
     pub fn is_empty_mem_init(&self) -> bool { self.mem_init.is_empty() }
 

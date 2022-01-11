@@ -21,7 +21,7 @@ impl SettingActionResult{
 
     pub fn is_ok(&self) -> bool { if let Self::Ok = self { true } else { false } } 
     pub fn is_no(&self) -> bool { if let Self::NoSatisfy = self { true } else { false } } 
-    pub fn is_with_warning(&self) -> bool { if let Self::OkWithWarning{..} = &self { true } else { false } } 
+    pub fn is_with_warning(&self) -> bool { if let Self::OkWithWarning{..} = self { true } else { false } } 
     pub fn is_error(&self) -> bool { if let Self::Error{..} = self { true } else { false } } 
 
     pub fn is_right_rule(&self) -> bool { self.is_ok() || self.is_with_warning() }
