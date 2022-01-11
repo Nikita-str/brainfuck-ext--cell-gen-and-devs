@@ -1,4 +1,4 @@
-use super::{compiler_pos::{ExtCompilerPos, CompilerPos}, dif_part_helper::settings::ErrorSetting};
+use super::{compiler_pos::{ExtCompilerPos, CompilerPos}, dif_part_helper::{settings::ErrorSetting, setting_action_result::SettingActionResult}};
 
 pub enum CompilerErrorUnexpEOF{
     NotClosedInclude,
@@ -15,13 +15,18 @@ pub enum CompilerErrorType{
     EmptyMacroName,
     BadMacroName(char),
     MacroAlreadyDefined,
-    CodeInMacros,
     UnknownMacros(String),
+
+    NotAllowedCompileCode,
+    NotAllowedCompileMacros,
+    NotAllowedCompileSettings,
 
     NotClosedWhile,
     ClosedWhileWithoutOpen,
 
     SettingError(ErrorSetting),
+
+    SettingActionError(String, SettingActionResult),
 }
 
 impl CompilerErrorType{
@@ -47,7 +52,9 @@ type CET = CompilerErrorType;
 impl CompilerError{
     pub fn new_file_open_err(file_name: String) -> Self { Self::new_wo_pos(CompilerErrorType::FileOpenError, file_name) }
     new_ce_2p!(new_already_defined, CET::MacroAlreadyDefined);
-    new_ce_2p!(new_code_in_macros, CET::CodeInMacros);
+    new_ce_2p!(new_cant_compile_code, CET::NotAllowedCompileCode);
+    new_ce_2p!(new_cant_compile_macros, CET::NotAllowedCompileMacros);
+    new_ce_2p!(new_cant_compile_settings, CET::NotAllowedCompileSettings);
     new_ce_2p!(new_empty_name, CET::EmptyFileName);
     new_ce_2p!(new_unexp_eof, CET::UnexpectedEOF);
     pub fn new_unknown_macros(pos: CompilerPos, file_name: String, macros_name: String) -> Self { 
@@ -58,6 +65,10 @@ impl CompilerError{
     }
     pub fn new_setting_error(pos: CompilerPos, file_name: String, error: ErrorSetting) -> Self { 
         Self::new(CET::SettingError(error), pos, file_name) 
+    }
+    pub fn new_setting_action_error(pos: CompilerPos, file_name: String, error: SettingActionResult, in_setting: String) -> Self {
+        if error.is_right_rule() { panic!("it is not error!") } 
+        Self::new(CET::SettingActionError(in_setting, error), pos, file_name) 
     }
 
     pub fn new_wo_pos(err_type: CompilerErrorType, file_name: String) -> Self{

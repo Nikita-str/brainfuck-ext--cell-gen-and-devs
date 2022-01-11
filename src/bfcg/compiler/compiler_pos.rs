@@ -1,6 +1,6 @@
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CompilerPos{
     pub line: usize,
     pub symb: usize,

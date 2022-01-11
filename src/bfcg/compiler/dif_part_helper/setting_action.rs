@@ -16,12 +16,15 @@ impl<T> SettingActions<T> {
     }
 
     pub fn make_setting_action(&self, setting: &Setting, c_info: &mut CompilerInfo<T>) -> SettingActionResult {
+        let mut last_error = None;
         for act in &self.actions {
             let suitable_action = (act.as_ref())(setting, c_info);
             if suitable_action.is_right_rule() { return suitable_action }
+            if suitable_action.is_error() { last_error = Some(suitable_action) }
         }    
 
-        return SettingActionResult::NoSatisfy
+        if let Some(error) = last_error { error }
+        else { SAR::NoSatisfy }
     }
 
     /// add rule that connect dev by 'dev[port]:dev_name'

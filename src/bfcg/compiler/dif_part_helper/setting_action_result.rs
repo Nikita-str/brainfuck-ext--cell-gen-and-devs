@@ -25,4 +25,9 @@ impl SettingActionResult{
     pub fn is_error(&self) -> bool { if let Self::Error{..} = self { true } else { false } } 
 
     pub fn is_right_rule(&self) -> bool { self.is_ok() || self.is_with_warning() }
+
+    pub fn get_warining(self) -> Option<String> { 
+        if let Self::OkWithWarning{warning} = self { Some(warning) }
+        else { None }
+    }
 }

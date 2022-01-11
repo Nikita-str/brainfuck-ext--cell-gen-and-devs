@@ -1,26 +1,56 @@
 use std::marker::PhantomData;
 
-use super::cmd_compiler::CmdCompiler;
+use super::{cmd_compiler::CmdCompiler, dif_part_helper::setting_action::SettingActions};
 
 
-pub struct CompilerOption<CC, T>
+pub enum CanCompile{
+    OnlyMacros,
+    OnlySettings,
+    MacroAndSettings,
+    All, // code + settings + macros
+}
+
+pub struct CompilerOption<'a, CC, T>
 where CC: CmdCompiler<T>,
 {
     pub phantom: PhantomData<T>,
-    pub only_macros: bool,
+    pub can_compile: CanCompile,
     pub can_dir_mem_init: bool,
     pub cmd_compiler: Option<CC>,
+    pub setting_action: &'a SettingActions<T>   
 }
 
-impl<CC, T> CompilerOption<CC, T>
+impl<'a, CC, T> CompilerOption<'a, CC, T>
 where CC: CmdCompiler<T>
 {
-    pub fn new_only_macro() -> Self{
+    /// # panic
+    /// * if can compile code (can_compile == All)
+    pub fn new_only(&self, can_compile: CanCompile) -> Self{
+        if let CanCompile::All = can_compile { panic!("when you use other files you dont whant to compile code") }
         Self {
             phantom: PhantomData,
-            only_macros: true,
+            can_compile,
             can_dir_mem_init: false,
             cmd_compiler: None,
+            setting_action: self.setting_action,
+        }
+    }
+
+    pub fn can_compile_code(&self) -> bool {
+        if let CanCompile::All = self.can_compile { true } else { false }
+    }
+
+    pub fn can_compile_macro(&self) -> bool {
+        match self.can_compile {
+            CanCompile::OnlyMacros | CanCompile::MacroAndSettings | CanCompile::All => true,
+            _ => false,
+        }
+    }
+    
+    pub fn can_compile_settings(&self) -> bool {
+        match self.can_compile {
+            CanCompile::OnlySettings | CanCompile::MacroAndSettings | CanCompile::All => true,
+            _ => false,
         }
     }
 }

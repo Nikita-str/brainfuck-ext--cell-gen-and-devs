@@ -6,8 +6,9 @@ use crate::bfcg::vm::port::Port;
 
 use super::cmd_compiler::CmdCompiler;
 use super::compiler_error::{CompilerError};
-use super::compiler_option::CompilerOption;
+use super::compiler_option::{CompilerOption, CanCompile};
 use super::compiler_pos::CompilerPos;
+use super::compiler_warning::{CompilerWarning, CompilerWarnings};
 use super::mem_init::MemInit;
 
 pub fn file_minimalize(str: &str) -> Result<String, ()>{
@@ -69,6 +70,8 @@ pub struct CompilerInfo<T>{
     port_names: HashMap<String, usize>,
     devs: HashMap<Port, String>, // map port to dev name
     macros: HashMap<String, String>, // map name of macros to code
+
+    warnings: CompilerWarnings,
 }
 
 impl<T> CompilerInfo<T>{
@@ -79,6 +82,7 @@ impl<T> CompilerInfo<T>{
             port_names: HashMap::new(), 
             devs: HashMap::new(),
             macros: HashMap::new(),
+            warnings: CompilerWarnings::new(),
         }
     }
 
@@ -139,6 +143,7 @@ impl<T> CompilerInfo<T>{
     }
 
     pub fn add_include_file(&mut self, include: Self) -> bool {
+        todo!("need add warnings, and other from Settings + need allow ##'# | ##!#  : STOP HERE")
         for (macro_name, macro_cmds) in include.macros {
             if !self.add_macro(macro_name, macro_cmds) { return false }
         }
@@ -186,20 +191,27 @@ enum SharpParse{
     UnexpectedEOF,
     EmptyName,
     BadMacroName(char),
-    FileInclude(String),
+    FileInclude(String, CanCompile),
     Macros{macro_name: String, macro_cmds: String},
 
     Temp(String),
 } 
 
 impl SharpParse{
+    fn is_error(&self) -> bool {  
+        match self {
+            Self::BadMacroName(_) | Self::UnexpectedEOF | Self::EmptyName => true,
+            _ => false,
+        }
+    }
+
     fn is_temp(&self) -> bool { if let Self::Temp(_) = self { true } else { false } }
     fn temp_to_string(self) -> Option<String> { if let Self::Temp(x) = self { Some(x) } else { None } } 
 
-    fn to_file_include(self) -> Self { 
+    fn to_file_include(self, can_compile: CanCompile) -> Self { 
         match self {
-            Self::BadMacroName(_) | Self::UnexpectedEOF | Self::EmptyName | Self::FileInclude(_) => self,
-            Self::Temp(s) => Self::FileInclude(s),
+            Self::BadMacroName(_) | Self::UnexpectedEOF | Self::EmptyName | Self::FileInclude(_, _) => self,
+            Self::Temp(s) => { Self::FileInclude(s, can_compile) }
             Self::Macros{ .. } => panic!("macro can't transform into include"), 
         }
     }
@@ -226,7 +238,15 @@ impl SharpParse{
         }
         let c = c.unwrap(); // must always ok; but if in loop exist algo error => exception
 
-        if c == super::compiler::SHARP { return SharpParse::to_file_include(Self::parse_until_sharp(param, None)) }
+        if c == super::compiler::SHARP { 
+            let to_sharp = Self::parse_until_sharp(param, None);
+            if to_sharp.is_error() { return to_sharp }
+
+            let to_sharp = to_sharp.temp_to_string().unwrap();
+            if to_sharp == "!" { return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::MacroAndSettings) }
+            if to_sharp == "'" { return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::OnlySettings) }
+            return SharpParse::FileInclude(to_sharp, CanCompile::OnlyMacros)
+        }
             
         let macro_name = Self::parse_until_sharp(param, Some(c));
         let macro_name =
@@ -262,11 +282,12 @@ where CC: CmdCompiler<T>,
     loop {
         match param.next() {
             None => {
-                if !option.only_macros {
+                if option.can_compile_code() {
                     let program = option.cmd_compiler.unwrap().get_program();
                     if let Err(err) = program { return Err(err) } //TODO: file_name!
                     else { ret.program = program.ok().unwrap(); }
                 }
+                if !ret.warnings.is_empty() { ret.warnings.set_file(file_name) }
                 return Ok(ret)
             }
             Some(super::compiler::COMMENT_LINE) => { 
@@ -281,8 +302,8 @@ where CC: CmdCompiler<T>,
                     SharpParse::UnexpectedEOF => return Err(CE::new_unexp_eof(param.get_pos(), file_name)),
                     SharpParse::BadMacroName(bad_char) => return Err(CE::new_bad_macro_name(param.get_pos(), file_name, bad_char)),
                     SharpParse::Temp(_) => panic!("here must not be temp"),
-                    SharpParse::FileInclude(include) => {
-                        let include_compile = compile(include, CompilerOption::<CC, T>::new_only_macro());
+                    SharpParse::FileInclude(include, can_compile) => {
+                        let include_compile = compile(include, option.new_only(can_compile));
                         let include_compile = if let Err(mut err) = include_compile { 
                             err.add_err_pos(param.get_pos(), file_name);
                             return Err(err)
@@ -294,6 +315,10 @@ where CC: CmdCompiler<T>,
                         }
                     }
                     SharpParse::Macros{ macro_name, macro_cmds } => {
+                        if !option.can_compile_macro() {
+                            return Err(CE::new_cant_compile_macros(param.get_pos(), file_name)) 
+                        }
+
                         let macro_code = ret.macro_transform(macro_cmds);
                         let macro_code = if let Ok(macro_code) = macro_code { macro_code }
                         else { return Err(CE::new_unknown_macros(param.get_pos(), file_name, macro_code.err().unwrap())) };
@@ -305,24 +330,36 @@ where CC: CmdCompiler<T>,
                 }
             }
 
-            Some(_) if option.only_macros => {
-                return Err(CE::new_code_in_macros(param.get_pos(), file_name)) 
-            }
-
             Some(super::compiler::SETTINGS_CHAR) => {
+                if !option.can_compile_settings() {
+                    return Err(CE::new_cant_compile_settings(param.get_pos(), file_name)) 
+                }
+
                 let setting = parse_until_char(&mut param, None, super::compiler::SETTINGS_CHAR);
-                let setting = 
+                let setting_string = 
                     if let Some(setting) = setting { setting } 
                     else { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) };
                 
-                match Setting::prepare_settings(&setting) {
+                match Setting::prepare_settings(&setting_string) {
                     Err(error) => return Err(CE::new_setting_error(param.get_pos(), file_name, error)),
                     Ok(setting) => {
-                        todo!("todo")
+                        let sa_res = option.setting_action.make_setting_action(&setting, &mut ret);
+
+                        if !sa_res.is_right_rule() {
+                            return Err(CE::new_setting_action_error(param.get_pos(), file_name, sa_res, setting_string))
+                        }
+
+                        if let Some(warning) = sa_res.get_warining() {
+                            ret.warnings.add_warning(
+                                CompilerWarning::SettingWarning{pos: param.get_pos(), setting: setting_string,  warning}
+                            );
+                        }
                     }
                 }
+            }
 
-                todo!("todo")
+            Some(_) if !option.can_compile_code() => {
+                return Err(CE::new_cant_compile_code(param.get_pos(), file_name)) 
             }
 
             Some(super::compiler::MACRO_USE_CHAR) => {
