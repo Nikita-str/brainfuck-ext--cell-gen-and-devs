@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 //MemInitMergeError
 
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub struct MemInit{
     param_pos_just: Option<usize>,
     param_pos_win: Option<usize>,
-    mem_init: HashMap<usize, Vec<u8>>,
+    mem_init: BTreeMap<usize, Vec<u8>>,
 }
 
 impl MemInit{
@@ -14,7 +14,7 @@ impl MemInit{
         Self { 
             param_pos_just: None,
             param_pos_win: None,
-            mem_init: HashMap::new() 
+            mem_init: BTreeMap::new(), 
         }
     }
 
@@ -94,4 +94,28 @@ impl MemInit{
         }
     }
 
+    pub fn code_gen(&self) -> String {
+        let mut ret = String::new();
+        let mut prev_mmc = 0;
+        let mut need_back_shift = 0;
+
+        for (mmc, mem_cell) in self.mem_init.iter() {
+            let mmc = *mmc;
+            debug_assert!(prev_mmc <= mmc, "b-tree-map must be sorted by key");
+            if mem_cell.is_empty() { continue }
+            
+            let delta = mmc - prev_mmc;
+            need_back_shift += delta + mem_cell.len();
+            ret += &super::code_gen::cgen_shift_cell_ptr(delta as i32);
+            for value in mem_cell {
+                super::code_gen::add_cgen_cell_create(&mut ret);
+                super::code_gen::add_cgen_set_cell_value(&mut ret, *value, false);
+            }
+
+            prev_mmc = mmc;
+        }
+
+        ret += &super::code_gen::cgen_shift_cell_ptr(-(need_back_shift as i32));
+        ret
+    }
 }

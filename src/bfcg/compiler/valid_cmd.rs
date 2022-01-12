@@ -1,4 +1,5 @@
 
+#[derive(Clone)]
 pub enum ValidCMD{
     NextCell,
     PrevCell,
@@ -44,7 +45,62 @@ pub enum ValidCMD{
 }
 
 impl ValidCMD{
-    pub fn std_parse_char(char: char) -> Option<Self>{
+
+    /*
+    # in phf no reverse fn => use it makes no sense 
+    # so reverse by python: 
+    ss = ""
+    for line in s.split('\n'):
+        x = line.split('=>')
+        if len(x) == 1: ss = ss + line + '\n'; continue
+        (l,r) = x
+        z = l.split("'")
+        ss = ss + z[0] + r.strip().removeprefix('Some(').removesuffix('),') + ' => ' + "Some('" + z[1] + "'),\n"
+    print(ss)
+
+    # (maybe in rust we can make macros for it?! (for gen such pair fn))
+    */
+
+    pub fn std_to_char(self) -> char { Self::std_cmd_to_char(self) }
+
+    pub const fn std_cmd_to_char(cmd: Self) -> char{
+        match cmd {
+            Self::NextCell => '>',
+            Self::PrevCell => '<',
+            Self::IncValue => '+',
+            Self::DecValue => '-',
+            Self::PrintValue => '.',
+            Self::ReadValue => ',',
+            Self::StartWhileNZ => '[',
+            Self::EndWhileNZ => ']',
+
+            Self::CreateCell => 'c',
+            Self::DeleteCell => 'd',
+
+            Self::TestZeroCell => 'z',
+            Self::ZeroedCell => '0',
+            Self::LeftShift => '*',
+            Self::RightShift => '/',
+            Self::And => '&',
+            Self::Clone => '$',
+
+            // cause NumPad:
+            Self::DecCoordX => '4',
+            Self::DecCoordY => '8',
+            Self::IncCoordX => '6',
+            Self::IncCoordY => '2',
+
+            Self::SetWinValue => '5',
+            Self::RedrawWin => '@',
+
+            Self::SetCurPort => 's',
+            Self::ReadFromPort => 'r',
+            Self::WriteIntoPort => 'w',
+            Self::TestPort => 't',
+        }
+    }
+
+    pub const fn std_parse_char(char: char) -> Option<Self>{
         match char {
             '>' => Some(Self::NextCell),
             '<' => Some(Self::PrevCell),
