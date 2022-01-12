@@ -35,6 +35,8 @@ pub enum CompilerErrorType{
 
     SettingActionError(String, SettingActionResult),
     IncludeError(IncludeError),
+
+    Other(String),
 }
 
 impl CompilerErrorType{

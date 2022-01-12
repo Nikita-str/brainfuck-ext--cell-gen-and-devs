@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{cmd_compiler::CmdCompiler, dif_part_helper::setting_action::SettingActions};
+use super::{comand_compiler::CmdCompiler, dif_part_helper::setting_action::SettingActions};
 
 
 #[derive(Clone, Copy)]

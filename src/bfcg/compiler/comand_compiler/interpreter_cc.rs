@@ -1,11 +1,6 @@
-use super::{valid_cmd::ValidCMD, compiler_pos::CompilerPos, compiler_error::{CompilerErrorType}};
+use crate::bfcg::compiler::{valid_cmd::ValidCMD, compiler_pos::CompilerPos, compiler_error::CompilerErrorType};
 
-pub trait CmdCompiler<T>{
-    // cause mut self => real cmd may look like "xyz" | "i" | "use" | "arch" | "btw"
-    fn cmd_compile(&mut self, cmd: char, pos: CompilerPos) -> Option<CompilerErrorType>; 
-
-    fn get_program(self) -> Result<Vec<T>, CompilerErrorType>;
-}
+use super::{cmd_compiler::CmdCompiler, program_concat::{ProgramConcat, self}};
 
 
 pub struct InterpreterCmdCompiler{
@@ -39,5 +34,11 @@ impl CmdCompiler<ValidCMD> for InterpreterCmdCompiler{
     fn get_program(self) -> Result<Vec<ValidCMD>, CompilerErrorType> { 
         if self.open_while.len() == 0 { Ok(self.program) }
         else { Err(CompilerErrorType::NotClosedWhile(self.open_while)) } 
+    }
+}
+
+impl ProgramConcat<ValidCMD> for InterpreterCmdCompiler{
+    fn program_concat(p1: Vec<ValidCMD>, p2: Vec<ValidCMD>) -> Vec<ValidCMD> {
+        program_concat::default_program_concat(p1, p2)
     }
 }

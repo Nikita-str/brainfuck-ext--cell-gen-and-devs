@@ -4,7 +4,7 @@ use std::str::Chars;
 use crate::bfcg::compiler::dif_part_helper::settings::Setting;
 use crate::bfcg::vm::port::Port;
 
-use super::cmd_compiler::CmdCompiler;
+use super::comand_compiler::CmdCompiler;
 use super::compiler_error::{CompilerError, IncludeError};
 use super::compiler_option::{CompilerOption, CanCompile};
 use super::compiler_pos::CompilerPos;
