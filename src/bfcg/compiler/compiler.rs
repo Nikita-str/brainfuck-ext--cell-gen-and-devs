@@ -9,6 +9,7 @@ use super::compiler_error::{CompilerError, IncludeError};
 use super::compiler_option::{CompilerOption, CanCompile};
 use super::compiler_pos::CompilerPos;
 use super::compiler_warning::{CompilerWarning, CompilerWarnings};
+use super::dif_part_helper::setting_action_result::SettingActionResult;
 use super::mem_init::MemInit;
 
 pub fn file_minimalize(str: &str) -> Result<String, ()>{
@@ -72,6 +73,7 @@ pub struct CompilerInfo<T>{
     macros: HashMap<String, String>, // map name of macros to code
 
     warnings: CompilerWarnings,
+    settings_for_parent: Vec<Setting>,
 }
 
 impl<T> CompilerInfo<T>{
@@ -83,8 +85,11 @@ impl<T> CompilerInfo<T>{
             devs: HashMap::new(),
             macros: HashMap::new(),
             warnings: CompilerWarnings::new(),
+            settings_for_parent: vec![],
         }
     }
+
+    pub fn add_setting_for_parent(&mut self, setting: Setting) { self.settings_for_parent.push(setting) }
 
     pub fn clear_port_names(&mut self) { self.port_names.clear() }
     pub fn get_port(&self, port_name: &str) -> Option<usize> { self.port_names.get(port_name).cloned() }
@@ -162,12 +167,41 @@ impl<T> CompilerInfo<T>{
         }
     }
 
+    /// ## result:
+    /// * None => no error
+    /// * Some(setting_string, ErrorResult)
+    pub fn include_file_setting<CC>(&mut self, include: &mut Self, option: &CompilerOption<CC, T>, pos: CompilerPos) 
+    -> Option<(String, SettingActionResult)> 
+    where CC: CmdCompiler<T>
+    {
+        for setting in std::mem::take(&mut include.settings_for_parent) {
+            let sa_res = option.setting_action.make_setting_action(&setting, self);
+
+            if !sa_res.is_right_rule() { return Some((setting.to_string(), sa_res)) }
+
+            let parent_must_process = sa_res.parent_must_process(); // is it always true?
+            
+            if let Some(warning) = sa_res.get_warining() {
+                self.warnings.add_warning(
+                    CompilerWarning::SettingWarning{pos: pos.clone(), setting: setting.to_string(),  warning}
+                );
+            }
+            
+            if parent_must_process { self.add_setting_for_parent(setting) }
+        }
+
+        None
+    }
+
     pub fn add_include_file(&mut self, include: Self, pos: CompilerPos) -> Option<IncludeError> {
         //todo!("need add warnings, and other from Settings + need allow ##'# | ##!#  : STOP HERE and we can compile!! [+ file path :(( ]")
         if !include.program.is_empty() { panic!("program cant be non empty") }
         if !include.warnings.is_empty() {
             self.warnings.add_warning(CompilerWarning::FromOtherFile{ pos: pos.clone(), warnings: include.warnings })
         }
+
+        if !include.settings_for_parent.is_empty() { panic!("you must previosly call include_file_setting"); }
+
         for (macro_name, macro_cmds) in include.macros {
             if !self.can_add_macro(&macro_name) { return Some(IncludeError::MacrosAlreadyDefined{ macro_name }) }
             if !self.add_macro(macro_name, macro_cmds) { panic!("cant be here") }
@@ -350,6 +384,8 @@ macro_rules! compile_prepare_setting {
                     return Err(CE::new_setting_action_error($param.get_pos(), $file_name, sa_res, $setting_string))
                 }
 
+                if sa_res.parent_must_process() { $ret.add_setting_for_parent(setting) }
+
                 if let Some(warning) = sa_res.get_warining() {
                     $ret.warnings.add_warning(
                         CompilerWarning::SettingWarning{pos: $param.get_pos(), setting: $setting_string,  warning}
@@ -378,6 +414,8 @@ where CC: CmdCompiler<T>,
             compile_prepare_setting!(option, param, file_name, ret, setting_string);
         } 
     }
+    if option.need_processed_default_settings() { panic!("[ALGO ERROR] never must be here") } 
+
 
     loop {
         match param.next() {
@@ -406,15 +444,21 @@ where CC: CmdCompiler<T>,
                     SharpParse::Temp(_) => panic!("here must not be temp"),
                     SharpParse::FileInclude(include, can_compile) => {
                         let include_compile = compile(include, option.new_only(can_compile));
-                        let include_compile = if let Err(mut err) = include_compile { 
+                        let mut include_compile = if let Err(mut err) = include_compile { 
                             err.add_err_pos(param.get_pos(), file_name);
                             return Err(err)
                         } else {
                             include_compile.ok().unwrap()
                         };
+
+                        // [+] processing merge include
+                        if let Some((set_str, error_sar)) = ret.include_file_setting(&mut include_compile, &option, param.get_pos()) {
+                            return Err(CE::new_setting_action_error(param.get_pos(), file_name, error_sar, set_str))
+                        }
                         if let Some(include_error) = ret.add_include_file(include_compile, param.get_pos()) {
                             return Err(CE::new_include_error(param.get_pos(), file_name, include_error))
                         }
+                        // [-] processing merge include
                     }
                     SharpParse::Macros{ macro_name, macro_cmds } => {
                         if !option.can_compile_macro() {

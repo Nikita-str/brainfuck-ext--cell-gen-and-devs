@@ -1,5 +1,6 @@
 
 
+#[derive(Debug)]
 pub struct Setting{ 
     pub params: Vec<SettingOneParam>, 
 }
@@ -8,7 +9,7 @@ impl Setting{
     pub fn len(&self) -> usize { self.params.len() }
 }
 
-
+#[derive(Debug)]
 pub struct SettingOneParam{
     pub param: String,
     pub additional_params: Vec<String>,
@@ -90,5 +91,31 @@ impl Setting{
         }
 
     return Ok(Self{ params: setting_params })
+    }
+}
+
+impl ToString for Setting{
+    fn to_string(&self) -> String{
+        let mut amount_rest = self.len();
+        let mut ret = String::new();
+        ret.push('\'');
+        for one_param in &self.params {
+            ret += &one_param.param;
+
+            let mut amount_add_rest = one_param.additional_params.len();
+            let amount_add_param = amount_add_rest;
+            if  amount_add_param != 0 { ret.push('['); }
+            for add_param in &one_param.additional_params {
+                ret += add_param;
+                amount_add_rest -= 1;
+                if amount_add_rest > 0 { ret.push('|') }
+            }
+            if  amount_add_param != 0 { ret.push(']'); }
+
+            amount_rest -= 1;
+            if amount_rest > 0 { ret.push(':') }
+        }
+        ret.push('\'');
+        return ret
     }
 }

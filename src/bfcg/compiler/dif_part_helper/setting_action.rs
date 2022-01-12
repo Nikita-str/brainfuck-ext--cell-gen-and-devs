@@ -24,7 +24,7 @@ impl<T> SettingActions<T> {
         }    
 
         if let Some(error) = last_error { error }
-        else { SAR::NoSatisfy }
+        else { SAR::new_no() }
     }
 
     /// add rule that connect dev by 'dev[port]:dev_name'
@@ -52,13 +52,13 @@ impl<T> SettingActions<T> {
                 else { return SAR::new_error_s("wrong port name: ".to_owned() + &dev_param[0]) };
             
             if let Some(prev_name) = c_info.add_dev(port, dev_name.to_owned()) {
-                return SAR::new_warning_s("device [".to_owned() + dev_name + "] stay instead device [" + &prev_name + "]" )
+                return SAR::new_warning_s("device [".to_owned() + dev_name + "] stay instead device [" + &prev_name + "]", false )
             } 
-            return SAR::Ok
+            return SAR::new_ok(false)
         });
     }
 
-    fn std_action_only_name(actions: &mut Self, the_name: Vec<String>, act: impl Fn(&mut CompilerInfo<T>) + 'static){
+    fn std_action_only_name(actions: &mut Self, the_name: Vec<String>, act: impl Fn(&mut CompilerInfo<T>) + 'static, need_in_parent: bool){
         actions.add_action(move |setting, c_info|{
             if setting.params.len() < 1 { return SAR::new_no() }
             if !the_name.contains(&setting.params[0].param) { return SAR::new_no() }
@@ -66,8 +66,8 @@ impl<T> SettingActions<T> {
             act(c_info);
 
             if setting.params[0].additional_params.len() != 0 
-               || setting.params.len() != 1  { return SAR::new_warning("waste params") }
-            else { return SAR::Ok }
+               || setting.params.len() != 1  { return SAR::new_warning("waste params", need_in_parent) }
+            else { return SAR::new_ok(need_in_parent) }
         });        
     }
 
@@ -76,7 +76,8 @@ impl<T> SettingActions<T> {
         Self::std_action_only_name(
             actions, 
             vec!["dis-all-dev".to_owned()], 
-            |c_info|{ c_info.get_mut_devs().clear() }
+            |c_info|{ c_info.get_mut_devs().clear() },
+            true,
         );
     }
 
@@ -85,7 +86,8 @@ impl<T> SettingActions<T> {
         Self::std_action_only_name(
             actions, 
             vec!["del-all-port-name".to_owned(), "del-all-pn".to_owned()], 
-            |c_info|{ c_info.clear_port_names() }
+            |c_info|{ c_info.clear_port_names() },
+            true,
         );
     }
     
@@ -121,7 +123,7 @@ impl<T> SettingActions<T> {
                 panic!("it must never occured!")
             }
 
-            return SAR::Ok 
+            return SAR::new_ok(true) 
         });     
     }
 
@@ -147,10 +149,10 @@ impl<T> SettingActions<T> {
             let port = port.unwrap();
 
             if let Some(prev_port) = c_info.add_port(port_name, port) { 
-                return SAR::new_warning_s("! changed port position from ".to_owned() + &port.to_string() + " to " + &prev_port.to_string()) 
+                return SAR::new_warning_s("! changed port position from ".to_owned() + &port.to_string() + " to " + &prev_port.to_string(), false) 
             }
 
-            return SAR::Ok 
+            return SAR::new_ok(false)
         });
     }
 
@@ -179,7 +181,7 @@ impl<T> SettingActions<T> {
                 panic!("must never here")
             }
 
-            return SAR::Ok 
+            return SAR::new_ok(false) 
         });
     }
 
@@ -200,6 +202,8 @@ impl<T> SettingActions<T> {
             if y_sz.is_err() { return SAR::new_error("wrong win y szie") }
             let mut x_sz: usize = x_sz.unwrap();
             let mut y_sz: usize = y_sz.unwrap();
+
+            // TODO: set x y sz in c_info!
 
             let max_sz: usize = u8::MAX.into();
             let max_sz = max_sz + 1;
@@ -224,8 +228,8 @@ impl<T> SettingActions<T> {
             let win_pos = c_info.get_mem_init().get_win_pos();
             c_info.get_mut_mem_init().add_bytes(win_pos, &win_mmc);
 
-            if already_in_win { return SAR::new_warning("in windows cell already exist params!") }
-            return SAR::Ok 
+            if already_in_win { return SAR::new_warning("in windows cell already exist params!", false) }
+            return SAR::new_ok(false)
         });
     }
 
