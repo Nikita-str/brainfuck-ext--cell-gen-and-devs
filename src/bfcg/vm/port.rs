@@ -1,5 +1,5 @@
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Port{
     Number(usize),
     Name(String),

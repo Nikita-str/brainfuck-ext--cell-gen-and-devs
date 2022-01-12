@@ -6,6 +6,11 @@ pub enum CompilerErrorUnexpEOF{
     NotClosedUseMacro,
 }
 
+pub enum IncludeError{
+    MacrosAlreadyDefined{macro_name: String},
+    MemInitMergeError{ mmc: usize },
+}
+
 pub enum CompilerErrorType{
     FileOpenError,
 
@@ -27,6 +32,7 @@ pub enum CompilerErrorType{
     SettingError(ErrorSetting),
 
     SettingActionError(String, SettingActionResult),
+    IncludeError(IncludeError),
 }
 
 impl CompilerErrorType{
@@ -47,6 +53,13 @@ macro_rules! new_ce_2p {
     };
 }
 
+macro_rules! new_ce_3p {
+    ( $ind:ident, $err_type:expr, $add_param_type:ident ) => {
+        pub fn $ind(pos: CompilerPos, file_name: String, x: $add_param_type) -> Self { Self::new($err_type (x), pos, file_name) }
+    };
+}
+
+
 type CET = CompilerErrorType;
 
 impl CompilerError{
@@ -57,15 +70,12 @@ impl CompilerError{
     new_ce_2p!(new_cant_compile_settings, CET::NotAllowedCompileSettings);
     new_ce_2p!(new_empty_name, CET::EmptyFileName);
     new_ce_2p!(new_unexp_eof, CET::UnexpectedEOF);
-    pub fn new_unknown_macros(pos: CompilerPos, file_name: String, macros_name: String) -> Self { 
-        Self::new(CET::UnknownMacros(macros_name), pos, file_name) 
-    }
-    pub fn new_bad_macro_name(pos: CompilerPos, file_name: String, bad_char: char) -> Self { 
-        Self::new(CET::BadMacroName(bad_char), pos, file_name) 
-    }
-    pub fn new_setting_error(pos: CompilerPos, file_name: String, error: ErrorSetting) -> Self { 
-        Self::new(CET::SettingError(error), pos, file_name) 
-    }
+
+    new_ce_3p!(new_unknown_macros, CET::UnknownMacros, String);
+    new_ce_3p!(new_bad_macro_name, CET::BadMacroName, char);
+    new_ce_3p!(new_setting_error, CET::SettingError, ErrorSetting);
+    new_ce_3p!(new_include_error, CET::IncludeError, IncludeError);
+
     pub fn new_setting_action_error(pos: CompilerPos, file_name: String, error: SettingActionResult, in_setting: String) -> Self {
         if error.is_right_rule() { panic!("it is not error!") } 
         Self::new(CET::SettingActionError(in_setting, error), pos, file_name) 

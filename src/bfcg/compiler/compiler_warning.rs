@@ -1,9 +1,16 @@
+use crate::bfcg::vm::port::Port;
+
 use super::compiler_pos::CompilerPos;
 
 
 #[derive(Debug)]
 pub enum CompilerWarning{
-    SettingWarning{ pos: CompilerPos, setting: String, warning: String }
+    SettingWarning{ pos: CompilerPos, setting: String, warning: String },
+    FromOtherFile{ pos: CompilerPos, warnings: CompilerWarnings},
+    /// use it ?only? when merge; when in the same file you know setting string! => use SettingWarning
+    OtherPortUsedInOtherFile { pos: CompilerPos, port_name: String, new_port: usize, old_port: usize },
+    /// use it ?only? when merge; when in the same file you know setting string! => use SettingWarning
+    OtherDevUsedInOtherFile { pos: CompilerPos, port: Port, new_dev_name: String, old_dev_name: String },
 }
 
 

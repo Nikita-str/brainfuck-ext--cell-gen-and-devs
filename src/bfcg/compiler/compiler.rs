@@ -5,7 +5,7 @@ use crate::bfcg::compiler::dif_part_helper::settings::Setting;
 use crate::bfcg::vm::port::Port;
 
 use super::cmd_compiler::CmdCompiler;
-use super::compiler_error::{CompilerError};
+use super::compiler_error::{CompilerError, IncludeError};
 use super::compiler_option::{CompilerOption, CanCompile};
 use super::compiler_pos::CompilerPos;
 use super::compiler_warning::{CompilerWarning, CompilerWarnings};
@@ -89,11 +89,26 @@ impl<T> CompilerInfo<T>{
     pub fn clear_port_names(&mut self) { self.port_names.clear() }
     pub fn get_port(&self, port_name: &str) -> Option<usize> { self.port_names.get(port_name).cloned() }
 
+    fn add_port_need_warning(&self, port_name: &str, port: usize) -> bool {
+        if let Some(old_port) = self.port_names.get(port_name) {
+            !(*old_port == port)
+        } else { false }
+    }
     /// ## Result
     /// if already exist port for this name => return Some(prev_value)
     /// else => return None
-    pub fn add_port(&mut self, port_name: String, port: usize) -> Option<usize> { self.port_names.insert(port_name, port) }
+    pub fn add_port(&mut self, port_name: String, port: usize) -> Option<usize> { 
+        if let Some(old_port) = self.port_names.insert(port_name, port) {
+            if old_port == port { None }
+            else { Some(old_port) }
+        } else { None }
+    }
 
+    fn add_dev_need_warning(&self, port: &Port, dev_name: &str) -> bool {
+        if let Some(old_dev_name) = self.devs.get(port) {
+            old_dev_name != dev_name
+        } else { false }
+    }
     pub fn add_dev(&mut self, port: Port, dev_name: String) -> Option<String> { self.devs.insert(port, dev_name) }
     pub fn get_devs(&self) -> &HashMap<Port, String> { &self.devs }
     pub fn get_mut_devs(&mut self) -> &mut HashMap<Port, String> { &mut self.devs }
@@ -134,6 +149,11 @@ impl<T> CompilerInfo<T>{
         Ok(macro_code)
     }
 
+    /// ## Result
+    /// * if cant self.add_macro => false
+    /// * else => true 
+    fn can_add_macro(&self, macro_name: &str) -> bool { !self.macros.contains_key(macro_name) }
+
     pub fn add_macro(&mut self, macro_name: String, macro_cmds: String) -> bool {
         if self.macros.contains_key(&macro_name) { false }
         else {  
@@ -142,12 +162,44 @@ impl<T> CompilerInfo<T>{
         }
     }
 
-    pub fn add_include_file(&mut self, include: Self) -> bool {
-        todo!("need add warnings, and other from Settings + need allow ##'# | ##!#  : STOP HERE")
-        for (macro_name, macro_cmds) in include.macros {
-            if !self.add_macro(macro_name, macro_cmds) { return false }
+    pub fn add_include_file(&mut self, include: Self, pos: CompilerPos) -> Option<IncludeError> {
+        //todo!("need add warnings, and other from Settings + need allow ##'# | ##!#  : STOP HERE and we can compile!! [+ file path :(( ]")
+        if !include.program.is_empty() { panic!("program cant be non empty") }
+        if !include.warnings.is_empty() {
+            self.warnings.add_warning(CompilerWarning::FromOtherFile{ pos: pos.clone(), warnings: include.warnings })
         }
-        true
+        for (macro_name, macro_cmds) in include.macros {
+            if !self.can_add_macro(&macro_name) { return Some(IncludeError::MacrosAlreadyDefined{ macro_name }) }
+            if !self.add_macro(macro_name, macro_cmds) { panic!("cant be here") }
+        }
+
+        if let Some(mmc) = self.mem_init.merge(include.mem_init) {
+            return Some(IncludeError::MemInitMergeError{ mmc })
+        }
+
+        for (port_name, port) in include.port_names {
+            if self.add_port_need_warning(&port_name, port) {
+                if let Some(old_port) = self.add_port(port_name.clone(), port) {
+                    self.warnings.add_warning(
+                        CompilerWarning::OtherPortUsedInOtherFile{ pos: pos.clone(), port_name, new_port: port, old_port }
+                    );
+                } else { panic!("warning dont need, but you say... you say that... that... you lied to me! ~baka~~") }
+            } else {
+                if let Some(_) = self.add_port(port_name, port) { panic!("there need warning, but you say that dont! ~baaaka~~") }    
+            }
+        }
+
+        for (port, dev_name) in include.devs {
+            if self.add_dev_need_warning(&port, &dev_name) {
+                if let Some(x) = self.add_dev(port.clone(), dev_name.clone()) {
+                    self.warnings.add_warning(
+                        CompilerWarning::OtherDevUsedInOtherFile{ pos: pos.clone(), port, new_dev_name: dev_name, old_dev_name: x }
+                    );
+                } else { panic!("[tsundere panic] [must never happen] are you an idiot? can you just tell me if there will be an error or not?") }
+            } else { self.add_dev(port, dev_name); }
+        }
+
+        None
     }
 
     pub fn get_macros_code(&self, macro_name: &str) -> Option<&str> {
@@ -191,6 +243,8 @@ enum SharpParse{
     UnexpectedEOF,
     EmptyName,
     BadMacroName(char),
+    CantCompileMacro,
+    CantCompileSetting,
     FileInclude(String, CanCompile),
     Macros{macro_name: String, macro_cmds: String},
 
@@ -210,7 +264,9 @@ impl SharpParse{
 
     fn to_file_include(self, can_compile: CanCompile) -> Self { 
         match self {
-            Self::BadMacroName(_) | Self::UnexpectedEOF | Self::EmptyName | Self::FileInclude(_, _) => self,
+            Self::BadMacroName(_) | Self::UnexpectedEOF 
+            | Self::CantCompileMacro | Self::CantCompileSetting
+            | Self::EmptyName | Self::FileInclude(_, _) => self,
             Self::Temp(s) => { Self::FileInclude(s, can_compile) }
             Self::Macros{ .. } => panic!("macro can't transform into include"), 
         }
@@ -225,7 +281,7 @@ impl SharpParse{
         else { SharpParse::Temp(ret_str) }
     }
 
-    fn parse_sharp(param: &mut InnerCompilerParam) -> SharpParse{
+    fn parse_sharp(param: &mut InnerCompilerParam, can_compile: CanCompile) -> SharpParse{
         let c;
         loop {
             match param.next() {
@@ -243,8 +299,16 @@ impl SharpParse{
             if to_sharp.is_error() { return to_sharp }
 
             let to_sharp = to_sharp.temp_to_string().unwrap();
-            if to_sharp == "!" { return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::MacroAndSettings) }
-            if to_sharp == "'" { return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::OnlySettings) }
+            if to_sharp == "!" {
+                if !can_compile.can_compile_macro() { return SharpParse::CantCompileMacro }
+                if !can_compile.can_compile_settings() { return SharpParse::CantCompileSetting }
+                return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::MacroAndSettings) 
+            }
+            if to_sharp == "'" { 
+                if !can_compile.can_compile_settings() { return SharpParse::CantCompileSetting }
+                return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::OnlySettings) 
+            }
+            if !can_compile.can_compile_macro() { return SharpParse::CantCompileMacro }
             return SharpParse::FileInclude(to_sharp, CanCompile::OnlyMacros)
         }
             
@@ -297,7 +361,9 @@ where CC: CmdCompiler<T>,
             Some(c) if c.is_whitespace() => { }
 
             Some(super::compiler::SHARP) => { 
-                match SharpParse::parse_sharp(&mut param) {
+                match SharpParse::parse_sharp(&mut param, option.can_compile) {
+                    SharpParse::CantCompileMacro => return Err(CE::new_cant_compile_macros(param.get_pos(), file_name)),
+                    SharpParse::CantCompileSetting => return Err(CE::new_cant_compile_settings(param.get_pos(), file_name)),
                     SharpParse::EmptyName => return Err(CE::new_empty_name(param.get_pos(), file_name)),
                     SharpParse::UnexpectedEOF => return Err(CE::new_unexp_eof(param.get_pos(), file_name)),
                     SharpParse::BadMacroName(bad_char) => return Err(CE::new_bad_macro_name(param.get_pos(), file_name, bad_char)),
@@ -310,8 +376,8 @@ where CC: CmdCompiler<T>,
                         } else {
                             include_compile.ok().unwrap()
                         };
-                        if !ret.add_include_file(include_compile) {
-                            return Err(CE::new_already_defined(param.get_pos(), file_name))
+                        if let Some(include_error) = ret.add_include_file(include_compile, param.get_pos()) {
+                            return Err(CE::new_include_error(param.get_pos(), file_name, include_error))
                         }
                     }
                     SharpParse::Macros{ macro_name, macro_cmds } => {

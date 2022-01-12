@@ -3,11 +3,32 @@ use std::marker::PhantomData;
 use super::{cmd_compiler::CmdCompiler, dif_part_helper::setting_action::SettingActions};
 
 
+#[derive(Clone, Copy)]
 pub enum CanCompile{
     OnlyMacros,
     OnlySettings,
     MacroAndSettings,
     All, // code + settings + macros
+}
+
+impl CanCompile{
+    pub fn can_compile_code(&self) -> bool {
+        if let CanCompile::All = self { true } else { false }
+    }
+
+    pub fn can_compile_macro(&self) -> bool {
+        match self {
+            CanCompile::OnlyMacros | CanCompile::MacroAndSettings | CanCompile::All => true,
+            _ => false,
+        }
+    }
+    
+    pub fn can_compile_settings(&self) -> bool {
+        match self {
+            CanCompile::OnlySettings | CanCompile::MacroAndSettings | CanCompile::All => true,
+            _ => false,
+        }
+    }    
 }
 
 pub struct CompilerOption<'a, CC, T>
@@ -36,21 +57,7 @@ where CC: CmdCompiler<T>
         }
     }
 
-    pub fn can_compile_code(&self) -> bool {
-        if let CanCompile::All = self.can_compile { true } else { false }
-    }
-
-    pub fn can_compile_macro(&self) -> bool {
-        match self.can_compile {
-            CanCompile::OnlyMacros | CanCompile::MacroAndSettings | CanCompile::All => true,
-            _ => false,
-        }
-    }
-    
-    pub fn can_compile_settings(&self) -> bool {
-        match self.can_compile {
-            CanCompile::OnlySettings | CanCompile::MacroAndSettings | CanCompile::All => true,
-            _ => false,
-        }
-    }
+    pub fn can_compile_code(&self) -> bool { self.can_compile.can_compile_code() }
+    pub fn can_compile_macro(&self) -> bool { self.can_compile.can_compile_macro() }
+    pub fn can_compile_settings(&self) -> bool { self.can_compile.can_compile_settings() }
 }

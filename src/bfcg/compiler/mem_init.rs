@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+//MemInitMergeError
 
 #[derive(Debug)]
 pub struct MemInit{
@@ -15,6 +16,17 @@ impl MemInit{
             param_pos_win: None,
             mem_init: HashMap::new() 
         }
+    }
+
+    /// ## Result
+    /// * if error => Some(..)
+    /// * else => None
+    pub fn merge(&mut self, other: Self) -> Option<usize> {
+        for (mmc, cell_init) in other.mem_init {
+            if self.len_in_mmc(mmc) != 0 { return Some(mmc) }
+            self.mem_init.insert(mmc, cell_init);
+        }
+        None
     }
 
     pub fn add_just_param(&mut self, byte: u8) -> bool {
