@@ -38,7 +38,8 @@ where CC: CmdCompiler<T>,
     pub can_compile: CanCompile,
     pub can_dir_mem_init: bool,
     pub cmd_compiler: Option<CC>,
-    pub setting_action: &'a SettingActions<T>   
+    pub setting_action: &'a SettingActions<T>,
+    pub default_settings: Vec<String>,   
 }
 
 impl<'a, CC, T> CompilerOption<'a, CC, T>
@@ -54,8 +55,12 @@ where CC: CmdCompiler<T>
             can_dir_mem_init: false,
             cmd_compiler: None,
             setting_action: self.setting_action,
+            default_settings: vec![], // default settings must be processed only in first file
         }
     }
+
+    pub fn need_processed_default_settings(&self) -> bool { !self.default_settings.is_empty() }
+    pub fn get_default_settings(&mut self) -> Vec<String> { std::mem::take(&mut self.default_settings) }
 
     pub fn can_compile_code(&self) -> bool { self.can_compile.can_compile_code() }
     pub fn can_compile_macro(&self) -> bool { self.can_compile.can_compile_macro() }

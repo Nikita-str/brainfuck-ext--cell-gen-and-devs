@@ -331,6 +331,35 @@ impl SharpParse{
 
 type CE = CompilerError;
 
+macro_rules! compile_check_error_compile_settings {
+    ( $option:ident, $param:ident, $file_name:ident ) => {
+        if ! $option.can_compile_settings() {
+            return Err(CE::new_cant_compile_settings($param.get_pos(), $file_name)) 
+        }
+    }
+}
+
+macro_rules! compile_prepare_setting {
+    ( $option:ident, $param:ident, $file_name:ident, $ret:ident, $setting_string:ident ) => {
+        match Setting::prepare_settings(& $setting_string) {
+            Err(error) => return Err(CE::new_setting_error($param.get_pos(), $file_name, error)),
+            Ok(setting) => {
+                let sa_res = $option.setting_action.make_setting_action(&setting, &mut $ret);
+
+                if !sa_res.is_right_rule() {
+                    return Err(CE::new_setting_action_error($param.get_pos(), $file_name, sa_res, $setting_string))
+                }
+
+                if let Some(warning) = sa_res.get_warining() {
+                    $ret.warnings.add_warning(
+                        CompilerWarning::SettingWarning{pos: $param.get_pos(), setting: $setting_string,  warning}
+                    );
+                }
+            }
+        }
+    }
+}
+
 // TODO: type of error insted of (); if return None => no errors
 pub fn compile<CC, T>(file_name: String, mut option: CompilerOption<CC, T>) -> Result<CompilerInfo<T>, CompilerError>
 where CC: CmdCompiler<T>,
@@ -342,6 +371,13 @@ where CC: CmdCompiler<T>,
 
     let mut ret = CompilerInfo::new();
     let mut param = InnerCompilerParam::new(chars);
+
+    if option.need_processed_default_settings() {
+        compile_check_error_compile_settings!(option, param, file_name);
+        for setting_string in option.get_default_settings() {
+            compile_prepare_setting!(option, param, file_name, ret, setting_string);
+        } 
+    }
 
     loop {
         match param.next() {
@@ -397,31 +433,14 @@ where CC: CmdCompiler<T>,
             }
 
             Some(super::compiler::SETTINGS_CHAR) => {
-                if !option.can_compile_settings() {
-                    return Err(CE::new_cant_compile_settings(param.get_pos(), file_name)) 
-                }
+                compile_check_error_compile_settings!(option, param, file_name);
 
                 let setting = parse_until_char(&mut param, None, super::compiler::SETTINGS_CHAR);
                 let setting_string = 
                     if let Some(setting) = setting { setting } 
                     else { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) };
                 
-                match Setting::prepare_settings(&setting_string) {
-                    Err(error) => return Err(CE::new_setting_error(param.get_pos(), file_name, error)),
-                    Ok(setting) => {
-                        let sa_res = option.setting_action.make_setting_action(&setting, &mut ret);
-
-                        if !sa_res.is_right_rule() {
-                            return Err(CE::new_setting_action_error(param.get_pos(), file_name, sa_res, setting_string))
-                        }
-
-                        if let Some(warning) = sa_res.get_warining() {
-                            ret.warnings.add_warning(
-                                CompilerWarning::SettingWarning{pos: param.get_pos(), setting: setting_string,  warning}
-                            );
-                        }
-                    }
-                }
+                compile_prepare_setting!(option, param, file_name, ret, setting_string);
             }
 
             Some(_) if !option.can_compile_code() => {
