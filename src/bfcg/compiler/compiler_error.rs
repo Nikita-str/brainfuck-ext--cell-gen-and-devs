@@ -12,6 +12,8 @@ pub enum IncludeError{
 }
 
 pub enum CompilerErrorType{
+    UnknownCmd(char),
+
     FileOpenError,
 
     UnexpectedEOF, // TODO: {await_close: [CompilerErrorUnexpEOF | char], pos_open: CompilerPos}
@@ -26,7 +28,7 @@ pub enum CompilerErrorType{
     NotAllowedCompileMacros,
     NotAllowedCompileSettings,
 
-    NotClosedWhile,
+    NotClosedWhile(Vec<CompilerPos>),
     ClosedWhileWithoutOpen,
 
     SettingError(ErrorSetting),

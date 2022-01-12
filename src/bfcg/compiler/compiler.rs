@@ -422,7 +422,7 @@ where CC: CmdCompiler<T>,
             None => {
                 if option.can_compile_code() {
                     let program = option.cmd_compiler.unwrap().get_program();
-                    if let Err(err) = program { return Err(err) } //TODO: file_name!
+                    if let Err(err) = program { return Err(CE::new_wo_pos(err, file_name)) } 
                     else { ret.program = program.ok().unwrap(); }
                 }
                 if !ret.warnings.is_empty() { ret.warnings.set_file(file_name) }
@@ -501,9 +501,8 @@ where CC: CmdCompiler<T>,
                         let macros_code = macros_code.unwrap().chars();
                         let cc = option.cmd_compiler.as_mut().unwrap();
                         for c in macros_code {
-                            if let Some(mut err) = cc.cmd_compile(c, param.get_pos()){
-                                err.add_err_pos(param.get_pos(), file_name);
-                                return Err(err)
+                            if let Some(err) = cc.cmd_compile(c, param.get_pos()){
+                                return Err(CE::new(err, param.get_pos(), file_name))
                             }                            
                         }
                     }
@@ -514,9 +513,8 @@ where CC: CmdCompiler<T>,
 
             Some(c) => {
                 let cc = option.cmd_compiler.as_mut().unwrap();
-                if let Some(mut err) = cc.cmd_compile(c, param.get_pos()){
-                    err.add_err_pos(param.get_pos(), file_name);
-                    return Err(err)
+                if let Some(err) = cc.cmd_compile(c, param.get_pos()){
+                    return Err(CE::new(err, param.get_pos(), file_name))
                 }
             }
         }

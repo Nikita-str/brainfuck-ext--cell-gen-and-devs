@@ -37,7 +37,7 @@ where CC: CmdCompiler<T>,
     pub phantom: PhantomData<T>,
     pub can_compile: CanCompile,
     pub can_dir_mem_init: bool,
-    pub cmd_compiler: Option<CC>,
+    pub cmd_compiler: Option<CC>, // TODO: &'a mut CC
     pub setting_action: &'a SettingActions<T>,
     pub default_settings: Vec<String>,   
 }

@@ -82,5 +82,8 @@ impl ValidCMD{
             _ => None,
         }
     }
+
+    pub fn is_start_while(&self) -> bool { if let Self::StartWhileNZ = self { true } else { false } }
+    pub fn is_end_while(&self) -> bool { if let Self::EndWhileNZ = self { true } else { false } }
 }
 

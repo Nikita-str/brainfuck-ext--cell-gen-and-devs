@@ -172,7 +172,7 @@ impl<T> SettingActions<T> {
             };
 
             let num = setting.params[1].param.parse();
-            if num.is_err() { return SAR::new_error_s("wrong port number: ".to_owned() + &setting.params[1].param) }
+            if num.is_err() { return SAR::new_error_s("wrong number: ".to_owned() + &setting.params[1].param) }
             let num: usize = num.unwrap();
 
             if num > u8::MAX.into() { return SAR::new_error_s("too big number(must be in [0; 2^8) ): ".to_owned() + &num.to_string()) }
