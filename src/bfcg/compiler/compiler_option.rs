@@ -31,12 +31,23 @@ impl CanCompile{
     }    
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum MemInitType{
+    Dirrect,
+    BeforeCode,
+    AfterCodeByConcat,
+}
+
+impl MemInitType{
+    pub fn mem_init_only_before_code(&self) -> bool { if let Self::BeforeCode = self { true } else { false } }
+}
+
 pub struct CompilerOption<'a, CC, T>
 where CC: CmdCompiler<T>,
 {
     pub phantom: PhantomData<T>,
     pub can_compile: CanCompile,
-    pub can_dir_mem_init: bool,
+    pub mem_init_type: MemInitType,
     pub cmd_compiler: Option<CC>, // TODO: &'a mut CC
     pub setting_action: &'a SettingActions<T>,
     pub default_settings: Vec<String>,   
@@ -52,7 +63,7 @@ where CC: CmdCompiler<T>
         Self {
             phantom: PhantomData,
             can_compile,
-            can_dir_mem_init: false,
+            mem_init_type: MemInitType::BeforeCode,
             cmd_compiler: None,
             setting_action: self.setting_action,
             default_settings: vec![], // default settings must be processed only in first file

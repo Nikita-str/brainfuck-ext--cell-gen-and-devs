@@ -1,4 +1,4 @@
-use crate::bfcg::{compiler::compiler_info::CompilerInfo, vm::port::Port, dev_emulators::dev::right_std_dev_name};
+use crate::bfcg::{compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType}, vm::port::Port, dev_emulators::dev::right_std_dev_name};
 
 use super::{settings::Setting, setting_action_result::SettingActionResult};
 
@@ -157,8 +157,8 @@ impl<T> SettingActions<T> {
     }
 
     #[allow(non_snake_case)]
-    fn std_action__add_param(actions: &mut Self) {
-        actions.add_action(|setting, c_info|{
+    fn std_action__add_param(actions: &mut Self, mem_init_type: MemInitType) {
+        actions.add_action(move |setting, c_info|{
             if setting.params.len() < 1 { return SAR::new_no() }
             if setting.params[0].param != "+param" { return SAR::new_no() }
             
@@ -170,6 +170,10 @@ impl<T> SettingActions<T> {
                     return SAR::new_error("excess additional params!") 
                 }
             };
+
+            if mem_init_type.mem_init_only_before_code() && c_info.get_inter_info().code_started {
+                return SAR::new_error("with current compiler settings you add params only before code")
+            }
 
             let num = setting.params[1].param.parse();
             if num.is_err() { return SAR::new_error_s("wrong number: ".to_owned() + &setting.params[1].param) }
@@ -186,15 +190,19 @@ impl<T> SettingActions<T> {
     }
 
     #[allow(non_snake_case)]
-    fn std_action__win_sz(actions: &mut Self) {
-        actions.add_action(|setting, c_info|{
+    fn std_action__win_sz(actions: &mut Self, mem_init_type: MemInitType) {
+        actions.add_action(move |setting, c_info|{
             if setting.params.len() < 1 { return SAR::new_no() }
             if setting.params[0].param != "win-sz" { return SAR::new_no() }
             
             if !c_info.get_mem_init().can_add_win_param() { return SAR::new_error("cant add param (seems like position of just-param is not seted)") } 
 
-            if setting.params.len() != 1 { return SAR::new_error("here must be name and 1 param") }
+            if setting.params.len() != 1 { return SAR::new_error("here must be name and 2 additional params") }
             if setting.params[0].additional_params.len() != 2  { return SAR::new_error("after 'win-sz' must stay 2 additional params") }
+
+            if mem_init_type.mem_init_only_before_code() && c_info.get_inter_info().code_started {
+                return SAR::new_error("with current compiler settings you add params only before code")
+            }
 
             let x_sz = setting.params[0].additional_params[0].parse();
             let y_sz = setting.params[0].additional_params[1].parse();
@@ -234,10 +242,10 @@ impl<T> SettingActions<T> {
     }
 
 
-    pub fn add_std_actions(actions: &mut Self) {
-        Self::std_action__win_sz(actions);
+    pub fn add_std_actions(actions: &mut Self, mem_init_type: MemInitType) {
+        Self::std_action__win_sz(actions, mem_init_type.clone());
+        Self::std_action__add_param(actions, mem_init_type.clone());
         Self::std_action__add_dev(actions);
-        Self::std_action__add_param(actions);
         Self::std_action__port_name(actions);
         Self::std_action__dis_all_dev(actions);
         Self::std_action__param_pos_set_jw(actions);

@@ -4,6 +4,7 @@ use crate::bfcg::compiler::dif_part_helper::settings::Setting;
 
 use super::comand_compiler::CmdCompiler;
 use super::compiler_error::{CompilerError};
+use super::compiler_inter_info::CompilerInterInfo;
 use super::compiler_option::{CompilerOption, CanCompile};
 use super::compiler_pos::CompilerPos;
 use super::compiler_info::CompilerInfo;
@@ -233,18 +234,44 @@ macro_rules! compile_prepare_setting {
     }
 }
 
+macro_rules! compile_one_cmd {
+    ( $param:ident, $file_name:ident, $c:ident, $cc:ident ) => {
+        if let Some(err) = $cc.cmd_compile($c, $param.get_pos()){
+            return Err(CE::new(err, $param.get_pos(), $file_name))
+        }
+    }
+}
+
+macro_rules! compile_seq_cmd {
+    ( $param:ident, $file_name:ident, $str_cmds:ident, $cc:ident ) => {
+        let seq_cmds = $str_cmds.chars();
+        for c in seq_cmds { compile_one_cmd!($param, $file_name, c, $cc) }
+    }
+}
+
+macro_rules! compile_mem_init_if_need {
+    ( $option:ident, $param:ident, $file_name:ident, $ret:ident ) => {
+        if let Some(mem_init_code) = $ret.set_code_start($option.mem_init_type) {
+            let cc = $option.cmd_compiler.as_mut().unwrap();
+            compile_seq_cmd!($param, $file_name, mem_init_code, cc);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------
 // COMPILER + PARSER: 
 
-pub fn compile<CC, T>(file_name: String, mut option: CompilerOption<CC, T>) -> Result<CompilerInfo<T>, CompilerError>
+pub fn compile<CC, T>(file_name: String, mut option: CompilerOption<CC, T>, inter_info: Option<CompilerInterInfo>) 
+-> Result<CompilerInfo<T>, CompilerError>
 where CC: CmdCompiler<T>,
 {
+    // TODO: file path
     let file_as_string = std::fs::read_to_string(&file_name);
     if file_as_string.is_err() { return Err(CompilerError::new_file_open_err(file_name)) }
     let file_as_string = file_as_string.unwrap();
     let chars = file_as_string.chars();
 
-    let mut ret = CompilerInfo::new();
+    let mut ret = CompilerInfo::new(inter_info);
     let mut param = InnerCompilerParam::new(chars);
 
     if option.need_processed_default_settings() {
@@ -282,7 +309,10 @@ where CC: CmdCompiler<T>,
                     SharpParse::BadMacroName(bad_char) => return Err(CE::new_bad_macro_name(param.get_pos(), file_name, bad_char)),
                     SharpParse::Temp(_) => panic!("here must not be temp"),
                     SharpParse::FileInclude(include, can_compile) => {
-                        let include_compile = compile(include, option.new_only(can_compile));
+                        let include_option = option.new_only(can_compile);
+                        let include_inter_info = Some(ret.get_inter_info().clone());
+                        let include_compile = compile(include, include_option, include_inter_info);
+
                         let mut include_compile = if let Err(mut err) = include_compile { 
                             err.add_err_pos(param.get_pos(), file_name);
                             return Err(err)
@@ -331,19 +361,19 @@ where CC: CmdCompiler<T>,
             }
 
             Some(super::compiler::MACRO_USE_CHAR) => {
+                // say that code started (even if used macro was empty (cause it is potential error))
+                // & compile mem init if need
+                ret.get_mut_inter_info().set_code_start();
+
                 let macros_name = parse_until_char(&mut param, None, super::compiler::MACRO_USE_CHAR);
                 if let Some(macros_name) = macros_name {
                     let macros_code = ret.get_macros_code(&macros_name);
                     if macros_code.is_none() { 
                         return Err(CE::new_unknown_macros(param.get_pos(), file_name, macros_name)) 
                     } else {
-                        let macros_code = macros_code.unwrap().chars();
+                        let macros_code = macros_code.unwrap();
                         let cc = option.cmd_compiler.as_mut().unwrap();
-                        for c in macros_code {
-                            if let Some(err) = cc.cmd_compile(c, param.get_pos()){
-                                return Err(CE::new(err, param.get_pos(), file_name))
-                            }                            
-                        }
+                        compile_seq_cmd!(param, file_name, macros_code, cc);
                     }
                 } else {
                     return Err(CE::new_unexp_eof(param.get_pos(), file_name))
@@ -351,10 +381,11 @@ where CC: CmdCompiler<T>,
             }
 
             Some(c) => {
+                // say that code started & compile mem init if need
+                compile_mem_init_if_need!(option, param, file_name, ret);
+
                 let cc = option.cmd_compiler.as_mut().unwrap();
-                if let Some(err) = cc.cmd_compile(c, param.get_pos()){
-                    return Err(CE::new(err, param.get_pos(), file_name))
-                }
+                compile_one_cmd!(param, file_name, c, cc);
             }
         }
     }

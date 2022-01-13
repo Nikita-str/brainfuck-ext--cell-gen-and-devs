@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::bfcg::vm::port::Port;
 
-use super::{dif_part_helper::{settings::Setting, setting_action_result::SettingActionResult}, mem_init::MemInit, compiler_warning::{CompilerWarnings, CompilerWarning}, comand_compiler::CmdCompiler, compiler_option::CompilerOption, compiler_pos::CompilerPos, compiler_error::IncludeError};
+use super::{dif_part_helper::{settings::Setting, setting_action_result::SettingActionResult}, mem_init::MemInit, compiler_warning::{CompilerWarnings, CompilerWarning}, comand_compiler::CmdCompiler, compiler_option::{CompilerOption, MemInitType}, compiler_pos::CompilerPos, compiler_error::IncludeError, compiler_inter_info::CompilerInterInfo};
 
 #[derive(Debug)]
 pub struct CompilerInfo<T>{
@@ -14,10 +14,12 @@ pub struct CompilerInfo<T>{
 
     warnings: CompilerWarnings,
     settings_for_parent: Vec<Setting>,
+
+    inter_info: CompilerInterInfo,
 }
 
 impl<T> CompilerInfo<T>{
-    pub fn new() -> Self { 
+    pub fn new(inter_info: Option<CompilerInterInfo>) -> Self { 
         Self {
             mem_init: MemInit::new(),
             program: vec![],
@@ -26,8 +28,12 @@ impl<T> CompilerInfo<T>{
             macros: HashMap::new(),
             warnings: CompilerWarnings::new(),
             settings_for_parent: vec![],
+            inter_info: if let Some(inter_info) = inter_info { inter_info } else { CompilerInterInfo::new() },
         }
     }
+
+    pub fn get_inter_info(&self) -> &CompilerInterInfo { &self.inter_info }
+    pub fn get_mut_inter_info(&mut self) -> &mut CompilerInterInfo { &mut self.inter_info }
 
     pub fn set_program(&mut self, program: Vec<T>) { 
         if !self.program.is_empty() { panic!("program already setted") }
@@ -144,13 +150,16 @@ impl<T> CompilerInfo<T>{
     }
 
     pub fn add_include_file(&mut self, include: Self, pos: CompilerPos) -> Option<IncludeError> {
-        //todo!("need add warnings, and other from Settings + need allow ##'# | ##!#  : STOP HERE and we can compile!! [+ file path :(( ]")
         if !include.program.is_empty() { panic!("program cant be non empty") }
         if !include.warnings.is_empty() {
             self.warnings.add_warning(CompilerWarning::FromOtherFile{ pos: pos.clone(), warnings: include.warnings })
         }
 
         if !include.settings_for_parent.is_empty() { panic!("you must previosly call include_file_setting"); }
+
+        // update inter info (currently do {nothing, panic if logical error}):
+        let include_inter_info = include.inter_info;
+        self.get_mut_inter_info().update_with_other(&include_inter_info); 
 
         for (macro_name, macro_cmds) in include.macros {
             if !self.can_add_macro(&macro_name) { return Some(IncludeError::MacrosAlreadyDefined{ macro_name }) }
@@ -189,5 +198,16 @@ impl<T> CompilerInfo<T>{
     pub fn get_macros_code(&self, macro_name: &str) -> Option<&str> {
         if let Some(code) = self.macros.get(macro_name) { Some(code) }
         else { None }
+    }
+
+    pub fn set_code_start(&mut self, mem_init_type: MemInitType) -> Option<String> {
+        if !self.get_inter_info().is_code_started() {
+            self.get_mut_inter_info().set_code_start();
+            if mem_init_type.mem_init_only_before_code() {
+                if self.mem_init.is_empty() { return None }
+                return Some(self.mem_init.code_gen())
+            }
+        } 
+        None 
     }
 }
