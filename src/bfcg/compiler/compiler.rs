@@ -334,6 +334,10 @@ where CC: CmdCompiler<T>,
                             return Err(CE::new_cant_compile_macros(param.get_pos(), file_name)) 
                         }
 
+                        if let Some(error) = option.mnc_check(&macro_name, &macro_cmds) {
+                            return Err(CE::new(error, param.get_pos(), file_name))
+                        }
+
                         let macro_code = ret.macro_transform(macro_cmds);
                         let macro_code = if let Ok(macro_code) = macro_code { macro_code }
                         else { return Err(CE::new_unknown_macros(param.get_pos(), file_name, macro_code.err().unwrap())) };

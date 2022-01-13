@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{comand_compiler::CmdCompiler, dif_part_helper::setting_action::SettingActions};
+use super::{comand_compiler::CmdCompiler, dif_part_helper::setting_action::SettingActions, mnc_checker::HolderChekerMNC, compiler_error::CompilerErrorType};
 
 
 #[derive(Clone, Copy)]
@@ -50,7 +50,8 @@ where CC: CmdCompiler<T>,
     pub mem_init_type: MemInitType,
     pub cmd_compiler: Option<CC>, // TODO: &'a mut CC
     pub setting_action: &'a SettingActions<T>,
-    pub default_settings: Vec<String>,   
+    pub default_settings: Vec<String>, 
+    pub mnc_checker: &'a HolderChekerMNC<'a>,
 }
 
 impl<'a, CC, T> CompilerOption<'a, CC, T>
@@ -67,6 +68,7 @@ where CC: CmdCompiler<T>
             cmd_compiler: None,
             setting_action: self.setting_action,
             default_settings: vec![], // default settings must be processed only in first file
+            mnc_checker: self.mnc_checker,
         }
     }
 
@@ -76,4 +78,11 @@ where CC: CmdCompiler<T>
     pub fn can_compile_code(&self) -> bool { self.can_compile.can_compile_code() }
     pub fn can_compile_macro(&self) -> bool { self.can_compile.can_compile_macro() }
     pub fn can_compile_settings(&self) -> bool { self.can_compile.can_compile_settings() }
+
+    pub fn mnc_check(&self, macro_name: &str, macro_code: &str) -> Option<CompilerErrorType> {
+        if let Some((name, error)) = self.mnc_checker.check_all(macro_name, macro_code){
+            return Some( CompilerErrorType::MacroNameCheckError{ rule_checker_name: name, error } )
+        }
+        None
+    }
 }

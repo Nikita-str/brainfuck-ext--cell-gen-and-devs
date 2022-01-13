@@ -1,4 +1,4 @@
-use super::{compiler_pos::{ExtCompilerPos, CompilerPos}, dif_part_helper::{settings::ErrorSetting, setting_action_result::SettingActionResult}};
+use super::{compiler_pos::{ExtCompilerPos, CompilerPos}, dif_part_helper::{settings::ErrorSetting, setting_action_result::SettingActionResult}, mnc_checker::ChekerErrorMNC};
 
 pub enum CompilerErrorUnexpEOF{
     NotClosedInclude,
@@ -35,6 +35,8 @@ pub enum CompilerErrorType{
 
     SettingActionError(String, SettingActionResult),
     IncludeError(IncludeError),
+
+    MacroNameCheckError{rule_checker_name: String, error: ChekerErrorMNC},
 
     Other(String),
 }
