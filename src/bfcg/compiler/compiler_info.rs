@@ -35,6 +35,7 @@ impl<T> CompilerInfo<T>{
     pub fn get_inter_info(&self) -> &CompilerInterInfo { &self.inter_info }
     pub fn get_mut_inter_info(&mut self) -> &mut CompilerInterInfo { &mut self.inter_info }
 
+    pub fn get_ref_program(&self) -> &Vec<T> { &self.program }
     pub fn set_program(&mut self, program: Vec<T>) { 
         if !self.program.is_empty() { panic!("program already setted") }
         self.program = program; 

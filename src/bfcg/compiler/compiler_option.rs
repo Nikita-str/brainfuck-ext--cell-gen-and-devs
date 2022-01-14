@@ -57,6 +57,24 @@ where CC: CmdCompiler<T>,
 impl<'a, CC, T> CompilerOption<'a, CC, T>
 where CC: CmdCompiler<T>
 {
+    pub fn new(
+        mem_init_type: MemInitType, 
+        cmd_compiler: CC, 
+        setting_action: &'a SettingActions<T>, 
+        default_settings: Vec<String>,
+        mnc_checker: &'a HolderChekerMNC<'a>) -> Self 
+    {
+        Self {
+            phantom: PhantomData,
+            can_compile: CanCompile::All, 
+            mem_init_type, 
+            cmd_compiler: Some(cmd_compiler), 
+            setting_action, 
+            default_settings, 
+            mnc_checker
+        }
+    }
+
     /// # panic
     /// * if can compile code (can_compile == All)
     pub fn new_only(&self, can_compile: CanCompile) -> Self{

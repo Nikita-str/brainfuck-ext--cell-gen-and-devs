@@ -1,13 +1,13 @@
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompilerPos{
     pub line: usize,
     pub symb: usize,
 }
 
 impl CompilerPos{
-    pub fn new() -> Self { Self{ line: 1, symb: 1 } }
+    pub fn new() -> Self { Self{ line: 1, symb: 0 } }
 
     pub fn maybe_add_char(&mut self, c: Option<char>) {
         match c {
@@ -23,7 +23,7 @@ impl CompilerPos{
 
     pub fn next_line(&mut self) {
         self.line += 1; 
-        self.symb = 1;
+        self.symb = 0;
     }
     
     pub fn next_symb(&mut self) {

@@ -1,0 +1,19 @@
+; this code is written very awful
+; don't write like that!
+; this just for compiler check
+
+; all must 
+  --->;>> be              (+4)
+  +++<;+      ok ...      (+4)
++[-    +-]+ +      ;      (+8)
+>><    + ; + + -          (+4)
+;||||                     (+0)
+;+++                      (+0)
++*;;                      (+2)
++++                      ;(+3)
+[-[-]-[
+[+]]]-+
+.
+;234567  | upper: 7+7+1 = (+15)
+;------------------------------
+;            code len: 40 cmds
