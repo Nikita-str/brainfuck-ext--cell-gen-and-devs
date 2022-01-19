@@ -1,6 +1,6 @@
-use crate::bfcg::compiler::{valid_cmd::ValidCMD, compiler_pos::CompilerPos, compiler_error::CompilerErrorType};
+use crate::bfcg::{compiler::{valid_cmd::ValidCMD, compiler_pos::CompilerPos, compiler_error::CompilerErrorType}, general::TryIntoMutRef};
 
-use super::{cmd_compiler::CmdCompiler, program_concat::{ProgramConcat, self}};
+use super::{cmd_compiler::CmdCompiler, program_concat::{ProgramConcat, self}, NullPortNameHandler};
 
 
 pub struct InterpreterCmdCompiler{
@@ -41,4 +41,8 @@ impl ProgramConcat<ValidCMD> for InterpreterCmdCompiler{
     fn program_concat(p1: Vec<ValidCMD>, p2: Vec<ValidCMD>) -> Vec<ValidCMD> {
         program_concat::default_program_concat(p1, p2)
     }
+}
+
+impl TryIntoMutRef<NullPortNameHandler> for InterpreterCmdCompiler{
+    fn try_into_mut_ref(&mut self) -> Option<&mut NullPortNameHandler> { None }
 }

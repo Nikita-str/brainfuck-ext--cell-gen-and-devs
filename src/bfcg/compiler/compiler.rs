@@ -1,8 +1,9 @@
 use std::str::Chars;
 
 use crate::bfcg::compiler::dif_part_helper::settings::Setting;
+use crate::bfcg::general::TryIntoMutRef;
 
-use super::comand_compiler::CmdCompiler;
+use super::comand_compiler::{CmdCompiler, PortNameHandler};
 use super::compiler_error::{CompilerError};
 use super::compiler_inter_info::CompilerInterInfo;
 use super::compiler_option::{CompilerOption, CanCompile};
@@ -263,9 +264,12 @@ macro_rules! compile_mem_init_if_need {
 // ---------------------------------------------------------------------
 // COMPILER + PARSER: 
 
-pub fn compile<CC, T>(file_name: String, mut option: CompilerOption<CC, T>, inter_info: Option<CompilerInterInfo>) 
+pub fn compile<CC, T, NH>(file_name: String, mut option: CompilerOption<CC, T>, inter_info: Option<CompilerInterInfo>) 
 -> Result<CompilerInfo<T>, CompilerError>
-where CC: CmdCompiler<T>,
+where 
+CC: CmdCompiler<T>,
+CC: TryIntoMutRef<NH>,
+NH: PortNameHandler,
 {
     // TODO: file path
     let file_as_string = std::fs::read_to_string(&file_name);
@@ -289,6 +293,9 @@ where CC: CmdCompiler<T>,
         match param.next() {
             None => {
                 if option.can_compile_code() {
+                    if let Some(port_name_handler) = option.cmd_compiler.as_mut().unwrap().try_into_mut_ref(){
+                        port_name_handler.port_name_handle(ret.get_port_names_ref());
+                    }
                     let program = option.cmd_compiler.unwrap().get_program();
                     if let Err(err) = program { return Err(CE::new_wo_pos(err, file_name)) } 
                     else { ret.set_program(program.ok().unwrap()); }
