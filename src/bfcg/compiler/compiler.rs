@@ -367,8 +367,8 @@ where CC: CmdCompiler<T>,
             Some(super::compiler::MACRO_USE_CHAR) => {
                 // say that code started (even if used macro was empty (cause it is potential error))
                 // & compile mem init if need
-                ret.get_mut_inter_info().set_code_start();
-
+                compile_mem_init_if_need!(option, param, file_name, ret);
+                
                 let macros_name = parse_until_char(&mut param, None, super::compiler::MACRO_USE_CHAR);
                 if let Some(macros_name) = macros_name {
                     let macros_code = ret.get_macros_code(&macros_name);

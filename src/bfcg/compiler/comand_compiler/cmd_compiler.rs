@@ -4,5 +4,5 @@ pub trait CmdCompiler<T>{
     // cause mut self => real cmd may look like "xyz" | "i" | "use" | "arch" | "btw"
     fn cmd_compile(&mut self, cmd: char, pos: CompilerPos) -> Option<CompilerErrorType>; 
 
-    fn get_program(self) -> Result<Vec<T>, CompilerErrorType>;
+    fn get_program(self) -> Result<Vec<T>, CompilerErrorType>; // MAYBE:TODO: Result<Ok, Warn+Ok, Err> 
 }
