@@ -138,10 +138,12 @@ impl<T> CompilerInfo<T>{
 
             let parent_must_process = sa_res.parent_must_process(); // is it always true?
             
-            if let Some(warning) = sa_res.get_warining() {
-                self.warnings.add_warning(
-                    CompilerWarning::SettingWarning{pos: pos.clone(), setting: setting.to_string(),  warning}
-                );
+            if let Some(warnings) = sa_res.get_warinings() {
+                for warning in warnings {
+                    self.warnings.add_warning(
+                        CompilerWarning::SettingWarning{pos: pos.clone(), setting: setting.to_string(), warning}
+                    );
+                }
             }
             
             if parent_must_process { self.add_setting_for_parent(setting) }

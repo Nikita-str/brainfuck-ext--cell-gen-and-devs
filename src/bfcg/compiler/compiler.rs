@@ -224,10 +224,12 @@ macro_rules! compile_prepare_setting {
 
                 if sa_res.parent_must_process() { $ret.add_setting_for_parent(setting) }
 
-                if let Some(warning) = sa_res.get_warining() {
-                    $ret.add_warning(
-                        CompilerWarning::SettingWarning{pos: $param.get_pos(), setting: $setting_string,  warning}
-                    );
+                if let Some(warnings) = sa_res.get_warinings() {
+                    for warning in warnings {
+                        $ret.add_warning(
+                            CompilerWarning::SettingWarning{pos: $param.get_pos(), setting: $setting_string.clone(), warning}
+                        );
+                    }
                 }
             }
         }

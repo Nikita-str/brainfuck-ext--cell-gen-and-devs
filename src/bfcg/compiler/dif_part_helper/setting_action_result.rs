@@ -6,7 +6,7 @@ pub enum SettingActionResultType{
     /// highly probably right rule but wrong syntax
     Error{ error: String },
     /// right rule, but warning
-    OkWithWarning{ warning: String },
+    OkWithWarnings{ warning: Vec<String> },
     /// right rule
     Ok,
 }
@@ -14,22 +14,39 @@ pub enum SettingActionResultType{
 impl SettingActionResultType{
     pub fn new_ok() -> Self { Self::Ok }
     pub fn new_no() -> Self { Self::NoSatisfy }
-    pub fn new_warning_s(warning: String) -> Self { Self::OkWithWarning{ warning } }
-    pub fn new_warning(warning: &str) -> Self { Self::OkWithWarning{ warning: warning.to_owned() } }
+    pub fn new_warning_s(warning: String) -> Self { Self::OkWithWarnings{ warning: vec![warning]  } }
+    pub fn new_warning(warning: &str) -> Self { Self::new_warning_s(warning.to_owned()) }
     pub fn new_error_s(error: String) -> Self { Self::Error{ error } }
     pub fn new_error(error: &str) -> Self { Self::Error{ error: error.to_owned() } }
 
     pub fn is_ok(&self) -> bool { if let Self::Ok = self { true } else { false } } 
     pub fn is_no(&self) -> bool { if let Self::NoSatisfy = self { true } else { false } } 
-    pub fn is_with_warning(&self) -> bool { if let Self::OkWithWarning{..} = self { true } else { false } } 
+    pub fn is_with_warning(&self) -> bool { if let Self::OkWithWarnings{..} = self { true } else { false } } 
     pub fn is_error(&self) -> bool { if let Self::Error{..} = self { true } else { false } } 
 
     pub fn is_right_rule(&self) -> bool { self.is_ok() || self.is_with_warning() }
 
-    pub fn get_warining(self) -> Option<String> { 
-        if let Self::OkWithWarning{warning} = self { Some(warning) }
+    pub fn get_warinings(self) -> Option<Vec<String>> { 
+        if let Self::OkWithWarnings{warning} = self { Some(warning) }
         else { None }
     }
+
+    fn get_mut_warinings(&mut self) -> &mut Vec<String> { 
+        if let Self::OkWithWarnings{warning} = self { warning }
+        else { panic!("self without warnings") }
+    }
+
+    pub fn add_warning_s(&mut self, warning: String) {
+        if self.is_ok() { 
+            *self = Self::new_warning_s(warning)
+        } else if self.is_with_warning() {
+            self.get_mut_warinings().push(warning)
+        } else {
+            panic!("cant add warning")
+        }
+    }
+
+    pub fn add_warning(&mut self, warning: &str) { self.add_warning_s(warning.to_owned()) } 
 }
 
 pub struct SettingActionResult{
@@ -83,5 +100,8 @@ impl SettingActionResult{
     pub fn into_result(self) -> SettingActionResultType { self.result_type }
 
     
-    pub fn get_warining(self) -> Option<String> { self.result_type.get_warining() } 
+    pub fn get_warinings(self) -> Option<Vec<String>> { self.result_type.get_warinings() } 
+
+    pub fn add_warning(&mut self, warning: String) { self.result_type.add_warning_s(warning) }
+    pub fn add_warning_by_ref(&mut self, warning: &str) { self.result_type.add_warning(warning) }
 }

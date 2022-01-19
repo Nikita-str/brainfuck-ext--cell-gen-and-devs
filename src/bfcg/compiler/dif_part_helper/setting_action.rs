@@ -51,10 +51,14 @@ impl<T> SettingActions<T> {
                 else if Port::right_port_name(&dev_param[0]) || is_dev_num { Port::new(&dev_param[0]) } 
                 else { return SAR::new_error_s("wrong port name: ".to_owned() + &dev_param[0]) };
             
+            let mut ret = SAR::new_ok(false);
+
+            if let Port::Number(0) = port { ret.add_warning_by_ref("use of 0-port is not recommended"); }
+
             if let Some(prev_name) = c_info.add_dev(port, dev_name.to_owned()) {
-                return SAR::new_warning_s("device [".to_owned() + dev_name + "] stay instead device [" + &prev_name + "]", false )
+                ret.add_warning("device [".to_owned() + dev_name + "] stay instead device [" + &prev_name + "]");
             } 
-            return SAR::new_ok(false)
+            return ret
         });
     }
 
@@ -148,11 +152,15 @@ impl<T> SettingActions<T> {
             if port.is_err() { return SAR::new_error_s("wrong port number: ".to_owned() + &setting.params[2].param) }
             let port = port.unwrap();
 
+            let mut ret = SAR::new_ok(false);
+
+            if port == 0 { ret.add_warning_by_ref("use of 0-port is not recommended"); }
+
             if let Some(prev_port) = c_info.add_port(port_name, port) { 
-                return SAR::new_warning_s("! changed port position from ".to_owned() + &port.to_string() + " to " + &prev_port.to_string(), false) 
+                ret.add_warning("! changed port position from ".to_owned() + &port.to_string() + " to " + &prev_port.to_string()) 
             }
 
-            return SAR::new_ok(false)
+            return ret
         });
     }
 
