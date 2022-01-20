@@ -2,6 +2,17 @@ use std::collections::LinkedList;
 use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}};
 use super::{CmdCompiler, PortNameHandler, sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}};
 
+fn one_ll(x: u8) -> LinkedList<u8> { 
+    let mut ret = LinkedList::new();
+    ret.push_back(x);
+    ret
+ }
+
+ fn add_front_ll(mut ll: LinkedList<u8>, front_value: u8) -> LinkedList<u8>{
+    ll.push_front(front_value);
+    ll
+ }
+
 pub enum StdCmdNames{
     Pass, // 0x00
     Test, // 0x01
@@ -11,28 +22,75 @@ pub enum StdCmdNames{
     Write, // 0x05
 }
 
-
-
 impl StdCmdNames{
-    fn one_ll(x: u8) -> LinkedList<u8> { 
-        let mut ret = LinkedList::new();
-        ret.push_back(x);
-        ret
-     }
-
-     fn add_front_ll(mut ll: LinkedList<u8>, front_value: u8) -> LinkedList<u8>{
-        ll.push_front(front_value);
-        ll
-     }
-
     pub fn to_u8_seq(&self) -> impl Iterator<Item = u8> {
         match self {
-            Self::Pass => Self::one_ll(0x00).into_iter(),
-            Self::Test => Self::one_ll(0x01).into_iter(),
-            Self::Cur(se) => Self::add_front_ll(std_se_encoding(*se), 0x02).into_iter(),
-            Self::Set => Self::one_ll(0x03).into_iter(),
-            Self::Read => Self::one_ll(0x04).into_iter(),
-            Self::Write => Self::one_ll(0x05).into_iter(),
+            Self::Pass => one_ll(0x00).into_iter(),
+            Self::Test => one_ll(0x01).into_iter(),
+            Self::Cur(se) => add_front_ll(std_se_encoding(*se), 0x02).into_iter(),
+            Self::Set => one_ll(0x03).into_iter(),
+            Self::Read => one_ll(0x04).into_iter(),
+            Self::Write => one_ll(0x05).into_iter(),
+        }
+    }
+}
+
+
+pub enum MemDirCmdNames{
+    Inc,
+    Dec,
+    NextCell,
+    PrevCell,
+    JmpRight(usize),
+    JmpLeft(usize),
+    CreateCell,
+    DeleteCell,
+    LeftShift,
+    RightShift,
+    And,
+    Bnd,
+    Zero,
+    Clone,
+    TestZero,
+}
+
+impl MemDirCmdNames{
+    pub fn to_u8_seq(&self) -> impl Iterator<Item = u8> {
+        match self{
+            Self::Inc => one_ll(0x10).into_iter(),
+            Self::Dec => one_ll(0x11).into_iter(),
+            Self::NextCell => one_ll(0x12).into_iter(),
+            Self::PrevCell => one_ll(0x13).into_iter(),
+            Self::JmpRight(delta) => add_front_ll(std_se_encoding(*delta), 0x14).into_iter(),
+            Self::JmpLeft(delta) => add_front_ll(std_se_encoding(*delta), 0x15).into_iter(),
+            Self::CreateCell => one_ll(0x16).into_iter(),
+            Self::DeleteCell => one_ll(0x17).into_iter(),
+            Self::LeftShift => one_ll(0x18).into_iter(),
+            Self::RightShift => one_ll(0x19).into_iter(),
+            Self::And => one_ll(0x1A).into_iter(),
+            Self::Bnd => one_ll(0x1B).into_iter(),
+            Self::Zero => one_ll(0x1C).into_iter(),
+            Self::Clone => one_ll(0x1D).into_iter(),
+            Self::TestZero => one_ll(0x1F).into_iter(),
+        }
+    }
+
+    pub fn try_from_valid_cmd(valid_cmd: ValidCMD) -> Option<Self> {
+        match valid_cmd {
+            ValidCMD::IncValue => Some(Self::Inc),
+            ValidCMD::DecValue => Some(Self::Dec),
+            ValidCMD::NextCell => Some(Self::NextCell),
+            ValidCMD::PrevCell => Some(Self::PrevCell),
+            ValidCMD::CreateCell => Some(Self::CreateCell),
+            ValidCMD::DeleteCell => Some(Self::DeleteCell),
+            ValidCMD::LeftShift => Some(Self::LeftShift),
+            ValidCMD::RightShift => Some(Self::RightShift),
+            ValidCMD::And => Some(Self::And),
+            ValidCMD::Bnd => Some(Self::Bnd),
+            ValidCMD::ZeroedCell => Some(Self::Zero),
+            ValidCMD::Clone => Some(Self::Clone),
+            ValidCMD::TestZeroCell => Some(Self::TestZero),
+            _ => None,
         }
     }
 }
@@ -225,11 +283,24 @@ impl StdDirMemCmdCompiler{
         ret
     }
 
-    fn cmd_compile_to_byte(&self, cmd: char, pos: CompilerPos) -> Result<Vec<u8>, CompilerErrorType>{
-        match cmd {
+    fn cmd_compile_to_byte(&self, cmd: char, pos: CompilerPos) -> Result<Vec<u8>, CompilerErrorType> {
+        let valid_cmd = ValidCMD::std_parse_char(cmd);
+        if valid_cmd.is_none() { return Err(CompilerErrorType::UnknownCmd(cmd)) }
+        let valid_cmd = valid_cmd.unwrap();
 
-            _ => return Err(CompilerErrorType::UnknownCmd(cmd)),
+        let ret = Vec::new();
+
+        if let Some(md_cmd) = MemDirCmdNames::try_from_valid_cmd(valid_cmd) {
+            for x in md_cmd.to_u8_seq() { ret.push(x) }
+            return Ok(ret)
+        }
+
+        match valid_cmd.unwrap() {
+            ValidCMD::NextCell => {
+            }
         }        
+
+        ret
     }
 }
 

@@ -27,6 +27,7 @@ pub enum ValidCMD{
     LeftShift, // (~mul 2) cur_cell_value = cur_cell_value << 1;
     RightShift,// (~int div 2) cur_cell_value = cur_cell_value >> 1;
     And, // (~int remainder 2) cur_cell_value = &1;
+    Bnd, // cur_cell_value = &0x80;
     Clone, // clone value of cur cell into next 
 
     // screen cmd:
@@ -82,6 +83,7 @@ impl ValidCMD{
             Self::LeftShift => '*',
             Self::RightShift => '/',
             Self::And => '&',
+            Self::Bnd => '^',
             Self::Clone => '$',
 
             // cause NumPad:
@@ -119,6 +121,7 @@ impl ValidCMD{
             '*' => Some(Self::LeftShift),
             '/' => Some(Self::RightShift),
             '&' => Some(Self::And),
+            '^' => Some(Self::Bnd),
             '$' => Some(Self::Clone),
 
             // cause NumPad:
