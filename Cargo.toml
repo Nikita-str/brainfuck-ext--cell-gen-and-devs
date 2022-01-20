@@ -11,3 +11,4 @@ edition = "2021"
 glutin = "0.28.0"
 glium = "0.31.0"
 # phf = { version = "0.10.1", features = ["macros"] }
+boolvec = "0.2.6"

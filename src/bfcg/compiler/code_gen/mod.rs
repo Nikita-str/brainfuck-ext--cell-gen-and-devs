@@ -19,3 +19,5 @@ pub use code_gen::add_cgen_move_to_next_after_left_zero;
 
 pub use code_gen::cgen_move_to_prev_before_right_zero;
 pub use code_gen::add_cgen_move_to_prev_before_right_zero;
+
+pub use code_gen::add_cgen_init_se_cem;

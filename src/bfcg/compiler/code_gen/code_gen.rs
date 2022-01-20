@@ -93,3 +93,16 @@ pub fn add_cgen_move_to_prev_before_right_zero(cgen: &mut String) {
     cgen.push(ValidCMD::EndWhileNZ.std_to_char());
     cgen.push(ValidCMD::PrevCell.std_to_char());
 }
+
+
+pub fn add_cgen_init_se_cem<T>(cgen: &mut String, se: T, need_nullify: bool) 
+where T: IntoIterator<Item = u8>
+{
+    let mut last = false;
+    for se_num in se {
+        if last { panic!("incorrect se seq") }
+        add_cgen_set_cell_value(cgen, se_num, need_nullify);
+        if se_num < 0x80 { last = true; }
+        if !last { cgen.push(ValidCMD::NextCell.std_to_char()) }
+    }
+}

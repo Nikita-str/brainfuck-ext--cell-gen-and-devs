@@ -80,6 +80,8 @@ impl<T> CompilerInfo<T>{
 
     pub fn is_empty_mem_init(&self) -> bool { self.mem_init.is_empty() }
 
+    pub fn get_port_names_ref(&self) -> &HashMap<String, usize> { &self.port_names }
+
     /// general form of macro: #macro_name#macro_code#
     /// 
     /// general form of macro call: %macro_name%

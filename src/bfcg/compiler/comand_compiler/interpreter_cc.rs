@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::bfcg::compiler::{valid_cmd::ValidCMD, compiler_pos::CompilerPos, compiler_error::CompilerErrorType};
 
-use super::{cmd_compiler::CmdCompiler, program_concat::{ProgramConcat, self}};
+use super::{cmd_compiler::CmdCompiler, program_concat::{ProgramConcat, self}, PortNameHandler};
 
 
 pub struct InterpreterCmdCompiler{
@@ -41,4 +43,9 @@ impl ProgramConcat<ValidCMD> for InterpreterCmdCompiler{
     fn program_concat(p1: Vec<ValidCMD>, p2: Vec<ValidCMD>) -> Vec<ValidCMD> {
         program_concat::default_program_concat(p1, p2)
     }
+}
+
+impl PortNameHandler for InterpreterCmdCompiler{
+    fn need_port_name_handle(&self) -> bool { false }
+    fn port_name_handle(&mut self, _: &HashMap<String, usize>) -> Option<CompilerErrorType> { panic!("exccess handle") }
 }

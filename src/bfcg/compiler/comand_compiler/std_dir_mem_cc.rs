@@ -1,7 +1,6 @@
 use std::collections::LinkedList;
 use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}};
-
-use super::CmdCompiler;
+use super::{CmdCompiler, PortNameHandler, sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}};
 
 pub enum StdCmdNames{
     Pass, // 0x00
@@ -42,7 +41,7 @@ impl StdCmdNames{
 const USER_PR: usize = 0;
 const CONSOLE_PR: usize = USER_PR + 1;
 const WIN_PR: usize = CONSOLE_PR + 1;
-const MAX_PR: usize = WIN_PR + 1;
+pub(in super) const MAX_PR: usize = WIN_PR + 1;
 
 pub const MIN_PORT_AMOUNT: usize = 2;
 
@@ -60,7 +59,8 @@ pub struct StdDirMemCmdCompiler{
     cur_port_reg: usize,
     max_port_amount: usize,
     max_jump_size: usize,
-    reserved_use: bool,
+
+    inner_info: SDMCCAditionalInfo,
 }
 
 impl StdDirMemCmdCompiler{
@@ -135,7 +135,9 @@ impl StdDirMemCmdCompiler{
 
     fn reserve_initial_program_space(&self) -> Vec<u8>{
         // CUR[X_PR] SET[Z] where Z < max_port_amount
-        let one_pr_sz = self.reserve_one_pr_init();
+        let one_pr_sz = 
+            if self.inner_info.get_pr_reserve_sz() == 0 { self.reserve_one_pr_init() } 
+            else { self.inner_info.get_pr_reserve_sz() };
         let mut initial_pass = vec![];
         for _ in 0..(one_pr_sz * (MAX_PR - 1)) { // MAX_PR - 1 cause USER_PR not need to set
             for x in StdCmdNames::Pass.to_u8_seq() { initial_pass.push(x) }
@@ -150,6 +152,61 @@ impl StdDirMemCmdCompiler{
         ret
     }
 
+    fn cgen_set_port(&mut self, pr: &PrPrepared, port_num: usize) {
+        let pr_index = pr.to_index();
+        let set_byte = move |x: &mut Self, cgen_compiled_sz: &mut usize, byte|{
+            x.program[pr_index * x.inner_info.get_pr_reserve_sz() + *cgen_compiled_sz] = byte;
+            *cgen_compiled_sz += 1;
+        };
+        let cgen_compile = |cgen: &str, x: &mut Self, cgen_compiled_sz: &mut usize|{
+            for cmd in cgen.chars() {
+                if let Ok(bytes) = x.cmd_compile_to_byte(cmd, CompilerPos::new()) {
+                    for byte in bytes { set_byte(x, cgen_compiled_sz, byte); } 
+                } else {
+                    panic!("cant compile auto gen code")
+                }
+            }
+        };
+
+
+        if self.inner_info.get_pr_reserve_sz() == 0 { panic!("uninit reserved size") }
+        let mut cgen = String::new();
+        let mut cgen_compiled_sz = 0;
+
+        // #############################################
+        // CGEN[START]
+        cgen.push(ValidCMD::NextCell.std_to_char());
+        
+        let cell_values = general::se_fn::std_se_encoding(port_num);
+        code_gen::add_cgen_init_se_cem(&mut cgen, cell_values, false);
+
+        code_gen::add_cgen_move_to_next_after_left_zero(&mut cgen);
+
+        cgen_compile(&cgen, self, &mut cgen_compiled_sz);
+
+        // #############################################
+        // CGEN[CENTER]    (CUR + SET)
+        let cur = if let PrPrepared::Console = pr { CONSOLE_PR } else { WIN_PR };
+        for byte in StdCmdNames::Cur(cur).to_u8_seq() { set_byte(self, &mut cgen_compiled_sz, byte); }
+        for byte in StdCmdNames::Set.to_u8_seq() { set_byte(self, &mut cgen_compiled_sz, byte); }
+
+        // #############################################
+        // CGEN[END]   
+        cgen.clear();
+        code_gen::add_cgen_move_to_prev_before_right_zero(&mut cgen);
+        code_gen::add_cgen_zero_while_not_zero(&mut cgen);
+        cgen_compile(&cgen, self, &mut cgen_compiled_sz);
+
+        if cgen_compiled_sz > self.inner_info.get_pr_reserve_sz() { panic!("[ALGO ERROR]: wrong reserved size counted") }
+
+        // nullify if already use this cell:
+        for _ in 0..(self.inner_info.get_pr_reserve_sz() - cgen_compiled_sz) {
+            set_byte(self, &mut cgen_compiled_sz, 0x00);
+        }
+
+        if cgen_compiled_sz != self.inner_info.get_pr_reserve_sz() { panic!("[ALGO ERROR] :/") }
+    }
+
     /// ## params
     /// + max_jump_size: if you dont know => use memory size
     pub fn new(max_port_amount: usize, max_jump_size: usize) -> Self{
@@ -160,8 +217,10 @@ impl StdDirMemCmdCompiler{
             cur_port_reg: 0,
             max_port_amount,
             max_jump_size,
-            reserved_use: false,
+
+            inner_info: SDMCCAditionalInfo::new(),
         };
+        ret.inner_info.set_pr_reserve_sz(ret.reserve_one_pr_init());
         ret.program = ret.program_init();
         ret
     }
@@ -187,5 +246,27 @@ impl CmdCompiler<u8> for StdDirMemCmdCompiler{
         } else {
             Ok(self.program)
         }
+    }
+}
+
+impl PortNameHandler for StdDirMemCmdCompiler{
+    fn need_port_name_handle(&self) -> bool { !self.inner_info.is_all_prepared() } 
+
+    fn port_name_handle(&mut self, port_names: &std::collections::HashMap<String, usize>) -> Option<CompilerErrorType> {
+        for (name, port_num) in port_names {
+            if let Some(x) = PrPrepared::from_name(name) {
+                if *port_num >= self.max_port_amount { 
+                    return Some( 
+                        CompilerErrorType::Other(
+                            format!("too big port num({}), max is {}", port_num, self.max_port_amount)
+                        ) 
+                    ) 
+                }
+                self.cgen_set_port(&x, *port_num);
+                self.inner_info.set_prepared(x);
+            }
+        }
+        
+        None
     }
 }
