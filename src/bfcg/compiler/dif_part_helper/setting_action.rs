@@ -1,4 +1,4 @@
-use crate::bfcg::{compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType}, vm::port::Port, dev_emulators::dev::right_std_dev_name};
+use crate::bfcg::{compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType}, vm::port::Port, dev_emulators::dev_utilities::right_std_dev_name};
 
 use super::{settings::Setting, setting_action_result::SettingActionResult};
 

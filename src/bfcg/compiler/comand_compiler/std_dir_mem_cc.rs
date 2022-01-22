@@ -1,5 +1,5 @@
 use std::collections::LinkedList;
-use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}};
+use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, dev_emulators::dev_utilities::mem_dev::CellMemDevStartAction};
 use super::{CmdCompiler, PortNameHandler, sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}};
 
 fn one_ll(x: u8) -> LinkedList<u8> { 
@@ -20,6 +20,7 @@ pub enum StdCmdNames{
     Set, // 0x03 + CEM: SE
     Read, // 0x04
     Write, // 0x05
+    ConstWrite(u8), // 0x06
 }
 
 impl StdCmdNames{
@@ -31,64 +32,37 @@ impl StdCmdNames{
             Self::Set => one_ll(0x03).into_iter(),
             Self::Read => one_ll(0x04).into_iter(),
             Self::Write => one_ll(0x05).into_iter(),
+            Self::ConstWrite(byte) => add_front_ll(one_ll(*byte), 0x06).into_iter(),
         }
     }
 }
 
 
-pub enum MemDirCmdNames{
-    Inc,
-    Dec,
-    NextCell,
-    PrevCell,
-    JmpRight(usize),
-    JmpLeft(usize),
-    CreateCell,
-    DeleteCell,
-    LeftShift,
-    RightShift,
-    And,
-    Bnd,
-    Zero,
-    Clone,
-    TestZero,
+#[derive(Clone, Copy)]
+#[repr(u8)]
+pub enum RegCmdNames{
+    TestZero = 0x07,
+    Inc = 0x08,
+    Dec = 0x09,
+    LeftShift = 0x0A,
+    RightShift = 0x0B,
+    And = 0x0C,
+    Bnd = 0x0D,
+    Zero = 0x0E,
 }
 
-impl MemDirCmdNames{
-    pub fn to_u8_seq(&self) -> impl Iterator<Item = u8> {
-        match self{
-            Self::Inc => one_ll(0x10).into_iter(),
-            Self::Dec => one_ll(0x11).into_iter(),
-            Self::NextCell => one_ll(0x12).into_iter(),
-            Self::PrevCell => one_ll(0x13).into_iter(),
-            Self::JmpRight(delta) => add_front_ll(std_se_encoding(*delta), 0x14).into_iter(),
-            Self::JmpLeft(delta) => add_front_ll(std_se_encoding(*delta), 0x15).into_iter(),
-            Self::CreateCell => one_ll(0x16).into_iter(),
-            Self::DeleteCell => one_ll(0x17).into_iter(),
-            Self::LeftShift => one_ll(0x18).into_iter(),
-            Self::RightShift => one_ll(0x19).into_iter(),
-            Self::And => one_ll(0x1A).into_iter(),
-            Self::Bnd => one_ll(0x1B).into_iter(),
-            Self::Zero => one_ll(0x1C).into_iter(),
-            Self::Clone => one_ll(0x1D).into_iter(),
-            Self::TestZero => one_ll(0x1F).into_iter(),
-        }
-    }
+impl RegCmdNames{
+    pub fn to_u8_seq(&self) -> impl Iterator<Item = u8> { one_ll(*self as u8).into_iter() }
 
     pub fn try_from_valid_cmd(valid_cmd: ValidCMD) -> Option<Self> {
         match valid_cmd {
             ValidCMD::IncValue => Some(Self::Inc),
             ValidCMD::DecValue => Some(Self::Dec),
-            ValidCMD::NextCell => Some(Self::NextCell),
-            ValidCMD::PrevCell => Some(Self::PrevCell),
-            ValidCMD::CreateCell => Some(Self::CreateCell),
-            ValidCMD::DeleteCell => Some(Self::DeleteCell),
             ValidCMD::LeftShift => Some(Self::LeftShift),
             ValidCMD::RightShift => Some(Self::RightShift),
             ValidCMD::And => Some(Self::And),
             ValidCMD::Bnd => Some(Self::Bnd),
             ValidCMD::ZeroedCell => Some(Self::Zero),
-            ValidCMD::Clone => Some(Self::Clone),
             ValidCMD::TestZeroCell => Some(Self::TestZero),
             _ => None,
         }
@@ -115,6 +89,8 @@ pub struct StdDirMemCmdCompiler{
     /// 
     /// ``` CUR[CONSOLE_PR] SET[console_port] WR READ WR WR CUR[WIN_PR] SET[win_port] CUR[CONSOLE_PR] READ WR CUR[USER_PR] READ READ WR```
     cur_port_reg: usize,
+    cem_cur_cell_in_reg: bool,
+
     max_port_amount: usize,
     max_jump_size: usize,
 
@@ -126,7 +102,7 @@ impl StdDirMemCmdCompiler{
     /// amount of byte that max need for compile cmd_seq
     /// ## panic
     /// if it cant be compiled
-    fn reserve_cmd_seq(&self, cmd_seq: &str) -> usize{
+    fn reserve_cmd_seq(&mut self, cmd_seq: &str) -> usize{
         let mut len = 0; // amount of byte that max need for setting cell value 
         for cmd in cmd_seq.chars() {
             if let Ok(x) = self.cmd_compile_to_byte(cmd, CompilerPos::new()) {
@@ -141,7 +117,7 @@ impl StdDirMemCmdCompiler{
     /// amount of byte that max need for compile one_cmd
     /// ## panic
     /// if it cant be compiled
-    fn reserve_cmd(&self, one_cmd: ValidCMD) -> usize{
+    fn reserve_cmd(&mut self, one_cmd: ValidCMD) -> usize{
         let cmd = one_cmd.std_to_char();
         if let Ok(x) = self.cmd_compile_to_byte(cmd, CompilerPos::new()) {
             return x.len()
@@ -152,9 +128,9 @@ impl StdDirMemCmdCompiler{
 
     /// ### Ru comment version:
     /// вычисляем размер (в байтах) который нужно оставить 
-    /// для генерации в CEM SE последовательности размера 
+    /// для генерации в CEM SE последовательности для 
     /// числа не больше max_x 
-    fn reserve_prog_space_cem_se_gen(&self, max_x: usize) -> usize{
+    fn reserve_prog_space_cem_se_gen(&mut self, max_x: usize) -> usize{
         // in the worst case if max is 0 we must nullify:
         let nullify_len = self.reserve_cmd(ValidCMD::ZeroedCell);
         
@@ -179,7 +155,7 @@ impl StdDirMemCmdCompiler{
     /// + CUR\[X_PR\] SET
     /// + set CEM ptr on X\[N\] | `[>]<`
     /// + clear all X\[i\] and set CEM ptr on 0 | `[0<]`
-    fn reserve_one_pr_init(&self) -> usize {
+    fn reserve_one_pr_init(&mut self) -> usize {
         let first_sh = self.reserve_cmd(ValidCMD::NextCell);
         let se_gen = self.reserve_prog_space_cem_se_gen(self.max_port_amount - 1);
         let to_start = self.reserve_cmd_seq(&code_gen::cgen_move_to_next_after_left_zero());
@@ -191,7 +167,7 @@ impl StdDirMemCmdCompiler{
         byte_len
     }
 
-    fn reserve_initial_program_space(&self) -> Vec<u8>{
+    fn reserve_initial_program_space(&mut self) -> Vec<u8>{
         // CUR[X_PR] SET[Z] where Z < max_port_amount
         let one_pr_sz = 
             if self.inner_info.get_pr_reserve_sz() == 0 { self.reserve_one_pr_init() } 
@@ -203,10 +179,11 @@ impl StdDirMemCmdCompiler{
         initial_pass
     }
 
-    fn program_init(&self) -> Vec<u8> {
+    fn program_init(&mut self) -> Vec<u8> {
         let mut ret = self.reserve_initial_program_space();
         for x in StdCmdNames::Cur(0).to_u8_seq() { ret.push(x); }
         for x in StdCmdNames::Set.to_u8_seq() { ret.push(x); }
+        self.cancel_pseudo();
         ret
     }
 
@@ -265,42 +242,60 @@ impl StdDirMemCmdCompiler{
         if cgen_compiled_sz != self.inner_info.get_pr_reserve_sz() { panic!("[ALGO ERROR] :/") }
     }
 
+    fn cancel_pseudo(&mut self){
+        if !self.program.is_empty() { panic!("potential ALGO ERROR") }
+        self.open_while = vec![];
+        self.cur_port_reg = 0;
+        self.cem_cur_cell_in_reg = false;
+    }
+
     /// ## params
     /// + max_jump_size: if you dont know => use memory size
     pub fn new(max_port_amount: usize, max_jump_size: usize) -> Self{
         if max_port_amount < MIN_PORT_AMOUNT { panic!("no enough port for all std devs (need minimum ports for console & win)") }
         let mut ret = Self{ 
             program: vec![],//Self::program_init(max_port_amount),
+            
             open_while: vec![],
             cur_port_reg: 0,
+            cem_cur_cell_in_reg: false,
+
             max_port_amount,
             max_jump_size,
 
             inner_info: SDMCCAditionalInfo::new(),
         };
-        ret.inner_info.set_pr_reserve_sz(ret.reserve_one_pr_init());
+        let pr_res_sz = ret.reserve_one_pr_init();
+        ret.inner_info.set_pr_reserve_sz(pr_res_sz);
         ret.program = ret.program_init();
         ret
     }
 
-    fn cmd_compile_to_byte(&self, cmd: char, pos: CompilerPos) -> Result<Vec<u8>, CompilerErrorType> {
+    fn cmd_compile_to_byte(&mut self, cmd: char, pos: CompilerPos) -> Result<Vec<u8>, CompilerErrorType> {
         let valid_cmd = ValidCMD::std_parse_char(cmd);
         if valid_cmd.is_none() { return Err(CompilerErrorType::UnknownCmd(cmd)) }
         let valid_cmd = valid_cmd.unwrap();
 
-        let ret = Vec::new();
+        let mut ret = Vec::new();
 
-        if let Some(md_cmd) = MemDirCmdNames::try_from_valid_cmd(valid_cmd) {
-            for x in md_cmd.to_u8_seq() { ret.push(x) }
+        if let Some(reg_cmd) = RegCmdNames::try_from_valid_cmd(valid_cmd) {
+            if !self.cem_cur_cell_in_reg { 
+                let get_cell_cmd = StdCmdNames::ConstWrite(CellMemDevStartAction::GetCellValue as u8); 
+                // TODO: STOP HERE : need CUR CELL MEM + CMD MEM
+                self.cem_cur_cell_in_reg = true;
+            }
+            for x in reg_cmd.to_u8_seq() { ret.push(x) }
             return Ok(ret)
         }
 
+        /* 
         match valid_cmd.unwrap() {
             ValidCMD::NextCell => {
             }
-        }        
+        }   
+        */     
 
-        ret
+        Ok(ret)
     }
 }
 
