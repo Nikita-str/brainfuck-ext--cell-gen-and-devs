@@ -27,7 +27,12 @@ impl CellMemDevStartAction{
 
 
 #[repr(u8)]
-pub enum CmdMemDevStartAction {
-    JumpLeft = 0x01, 
-    JumpRight = 0x02, 
+pub enum CmdMemDevAction {
+    StartJumpBackward = 0x01, 
+    StartJumpForward = 0x02, 
+
+    BeforeEnd = 0x00, // help for clear distinguish that SE ended
+
+    EndJumpBackward = 0x03, 
+    EndJumpForward = 0x04, 
 }

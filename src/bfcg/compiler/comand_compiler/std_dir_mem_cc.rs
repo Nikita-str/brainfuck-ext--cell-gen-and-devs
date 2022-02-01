@@ -1,6 +1,16 @@
 use std::collections::LinkedList;
-use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, dev_emulators::dev_utilities::{mem_dev::CellMemDevStartAction, win_dev::WinDevStartAction}};
-use super::{CmdCompiler, PortNameHandler, sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}, to_u8_seq::ToU8Seq, sdm_cc_main_info::SdmCcMainInfo};
+use crate::bfcg::{
+    general::{se_fn::std_se_encoding, self}, 
+    compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, 
+    dev_emulators::dev_utilities::{mem_dev::{CellMemDevStartAction, CmdMemDevAction}, win_dev::WinDevStartAction}, 
+    vm::hardware_info::HardwareInfo
+};
+use super::{
+    CmdCompiler, PortNameHandler, 
+    sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}, 
+    to_u8_seq::ToU8Seq, 
+    sdm_cc_main_info::{SdmCcMainInfo, SdmCcOpenWhile}
+};
 
 fn one_ll(x: u8) -> LinkedList<u8> { 
     let mut ret = LinkedList::new();
@@ -194,7 +204,7 @@ impl StdDirMemCmdCompiler{
             else { self.inner_info.get_pr_reserve_sz() };
             
         let mut initial_pass = vec![];
-        for _ in 0..(one_pr_sz * (MAX_PR - 1)) { // MAX_PR - 1 cause USER_PR not need to set
+        for _ in 0..(one_pr_sz * (MAX_PR - 1 - 2)) { // - 1 cause USER_PR not need to set; - 2 cause COM & CEM default-setted by hardware
             for x in StdCmdNames::Pass.to_u8_seq() { initial_pass.push(x) }
         }
         initial_pass
@@ -213,6 +223,8 @@ impl StdDirMemCmdCompiler{
     }
 
     fn cgen_set_port(&mut self, pr: &PrPrepared, port_num: usize) {
+        if pr == &PrPrepared::MemCell || pr == &PrPrepared::MemCmd { return }
+
         let save_main_info = self.clear_main_info();
 
         let pr_index = pr.to_index();
@@ -302,17 +314,24 @@ impl StdDirMemCmdCompiler{
     fn get_cem_cur_cell_in_reg(&self) -> bool { self.main_info.cem_cur_cell_in_reg }
     fn set_cem_cur_cell_in_reg(&mut self, new_value: bool) { self.main_info.cem_cur_cell_in_reg = new_value; }
 
+    fn get_jump_pass_amount(&self) -> usize {
+        let pass_amount = self.inner_info.get_jump_pass_amount();
+        if pass_amount != 0 { pass_amount }
+        else { std_se_encoding(self.main_info.get_max_jump_size()).len() }
+    }
+
     /// ## params
     /// + max_jump_size: if you dont know => use memory size
-    pub fn new(max_port_amount: usize, max_jump_size: usize) -> Self{
-        if max_port_amount < MIN_PORT_AMOUNT { panic!("no enough port for all std devs (need minimum ports for CEM, COM, console & win)") }
+    pub fn new(hardware_info: HardwareInfo) -> Self{
+        if hardware_info.max_port_amount < MIN_PORT_AMOUNT { panic!("no enough port for all std devs (need minimum ports for CEM, COM, console & win)") }
         let mut ret = Self{ 
             program: vec![],//Self::program_init(max_port_amount),
-            main_info: SdmCcMainInfo::new(max_port_amount, max_jump_size),
+            main_info: SdmCcMainInfo::new(hardware_info.max_port_amount, hardware_info.max_jump_size),
             inner_info: SDMCCAditionalInfo::new(),
         };
         let pr_res_sz = ret.reserve_one_pr_init();
         ret.inner_info.set_pr_reserve_sz(pr_res_sz);
+        ret.inner_info.set_jump_pass_amount(ret.get_jump_pass_amount());
         ret.program = ret.program_init();
         ret
     }
@@ -433,7 +452,31 @@ impl CmdCompiler<u8> for StdDirMemCmdCompiler{
                 self.ctb_to(StdCmdNames::Set);
             }
             // #############################################################
+            ValidCMD::StartWhileNZ => {
+                self.ctb_unload_cur_cem(); // cause it's value can be changed
+                self.ctb_load_cur_cem(); // cause we need it's value in reg
 
+                let cmd_pos = self.program.len();
+                self.main_info.open_while.push(SdmCcOpenWhile::new(pos, cmd_pos));
+
+                self.ctb_set_cur_pr(MEM_CMD_PR);
+                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevAction::StartJumpForward as u8));
+                self.ctb_to(StdCmdNames::Write); // value for jump
+                
+                // read cur se_seq (jump shift) from COM and send it to itself:
+                for _ in 0..self.get_jump_pass_amount() {
+                    self.ctb_to(StdCmdNames::Read); 
+                    self.ctb_to(StdCmdNames::Pass); // reserve space in COM for jump
+                    self.ctb_to(StdCmdNames::Write);
+                }
+
+                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevAction::BeforeEnd as u8));
+                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevAction::EndJumpForward as u8));
+            }
+            ValidCMD::EndWhileNZ => {
+                // ...
+            }
+            // #############################################################
             _ => panic!("unaccounted cmd {}", cmd),
         }   
              
