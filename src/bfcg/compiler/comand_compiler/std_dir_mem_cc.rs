@@ -1,6 +1,6 @@
 use std::collections::LinkedList;
 use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, dev_emulators::dev_utilities::mem_dev::CellMemDevStartAction};
-use super::{CmdCompiler, PortNameHandler, sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}};
+use super::{CmdCompiler, PortNameHandler, sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}, to_u8_seq::ToU8Seq};
 
 fn one_ll(x: u8) -> LinkedList<u8> { 
     let mut ret = LinkedList::new();
@@ -23,8 +23,8 @@ pub enum StdCmdNames{
     ConstWrite(u8), // 0x06
 }
 
-impl StdCmdNames{
-    pub fn to_u8_seq(&self) -> impl Iterator<Item = u8> {
+impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
+    fn to_u8_seq(&self) -> <LinkedList<u8> as IntoIterator>::IntoIter {
         match self {
             Self::Pass => one_ll(0x00).into_iter(),
             Self::Test => one_ll(0x01).into_iter(),
@@ -51,9 +51,11 @@ pub enum RegCmdNames{
     Zero = 0x0E,
 }
 
-impl RegCmdNames{
-    pub fn to_u8_seq(&self) -> impl Iterator<Item = u8> { one_ll(*self as u8).into_iter() }
+impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for RegCmdNames {
+    fn to_u8_seq(&self) -> <LinkedList<u8> as IntoIterator>::IntoIter { one_ll(*self as u8).into_iter() }
+}
 
+impl RegCmdNames{
     pub fn try_from_valid_cmd(valid_cmd: ValidCMD) -> Option<Self> {
         match valid_cmd {
             ValidCMD::IncValue => Some(Self::Inc),
@@ -71,11 +73,13 @@ impl RegCmdNames{
 
 /// PR is PORT REG
 const USER_PR: usize = 0;
-const CONSOLE_PR: usize = USER_PR + 1;
+const MEM_CELL_PR: usize = USER_PR + 1;
+const MEM_CMD_PR: usize = MEM_CELL_PR + 1;
+const CONSOLE_PR: usize = MEM_CMD_PR + 1;
 const WIN_PR: usize = CONSOLE_PR + 1;
 pub(in super) const MAX_PR: usize = WIN_PR + 1;
 
-pub const MIN_PORT_AMOUNT: usize = 2;
+pub const MIN_PORT_AMOUNT: usize = MAX_PR - 1;
 
 /// standart cc with cpu direct memory access (Inc, Dec, NextCell, JumpRight, ...)
 pub struct StdDirMemCmdCompiler{
@@ -249,10 +253,37 @@ impl StdDirMemCmdCompiler{
         self.cem_cur_cell_in_reg = false;
     }
 
+    // ------------------------------------------
+    // [compile to byte] 
+
+    #[inline]
+    fn ctb_to<Iter>(&mut self, program: &mut Vec<u8>, to_u8_seq: impl ToU8Seq<Iter>) 
+    where Iter: Iterator<Item = u8>
+    {
+        for x in to_u8_seq.to_u8_seq() { program.push(x); }
+    }
+
+    #[inline]
+    fn ctb_set_cur_pr(&mut self, program: &mut Vec<u8>, new_cur_pr: usize) {
+        if new_cur_pr == self.cur_port_reg { return }
+        self.ctb_to(program, StdCmdNames::Cur(new_cur_pr));
+        self.cur_port_reg = new_cur_pr;
+    }
+
+    #[inline]
+    fn ctb_load_cur_cem(&mut self, program: &mut Vec<u8>) {
+        if self.cem_cur_cell_in_reg { return }
+        self.ctb_set_cur_pr(program, MEM_CELL_PR);
+        self.ctb_to(program, StdCmdNames::ConstWrite(CellMemDevStartAction::GetCellValue as u8)); 
+        self.cem_cur_cell_in_reg = true;
+    }
+
+    // ------------------------------------------
+
     /// ## params
     /// + max_jump_size: if you dont know => use memory size
     pub fn new(max_port_amount: usize, max_jump_size: usize) -> Self{
-        if max_port_amount < MIN_PORT_AMOUNT { panic!("no enough port for all std devs (need minimum ports for console & win)") }
+        if max_port_amount < MIN_PORT_AMOUNT { panic!("no enough port for all std devs (need minimum ports for CEM, COM, console & win)") }
         let mut ret = Self{ 
             program: vec![],//Self::program_init(max_port_amount),
             
@@ -280,9 +311,7 @@ impl StdDirMemCmdCompiler{
 
         if let Some(reg_cmd) = RegCmdNames::try_from_valid_cmd(valid_cmd) {
             if !self.cem_cur_cell_in_reg { 
-                let get_cell_cmd = StdCmdNames::ConstWrite(CellMemDevStartAction::GetCellValue as u8); 
-                // TODO: STOP HERE : need CUR CELL MEM + CMD MEM
-                self.cem_cur_cell_in_reg = true;
+                self.ctb_load_cur_cem(&mut ret);
             }
             for x in reg_cmd.to_u8_seq() { ret.push(x) }
             return Ok(ret)
