@@ -54,3 +54,12 @@ impl SDMCCAditionalInfo{
         return true
     }
 }
+
+impl Default for SDMCCAditionalInfo{
+    fn default() -> Self {
+        Self { 
+            one_pr_reserve_sz: 0, 
+            pr_prepared: BoolVec::new() 
+        }
+    }
+}

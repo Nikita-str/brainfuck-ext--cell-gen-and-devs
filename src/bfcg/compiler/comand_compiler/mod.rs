@@ -4,6 +4,7 @@ mod interpreter_cc;
 mod std_dir_mem_cc;
 mod port_name_handler;
 mod sdm_cc_additional_info;
+mod sdm_cc_main_info;
 mod to_u8_seq;
 
 pub use cmd_compiler::CmdCompiler;
