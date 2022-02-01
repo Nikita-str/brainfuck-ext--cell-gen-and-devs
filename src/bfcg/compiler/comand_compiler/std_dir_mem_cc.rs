@@ -121,6 +121,21 @@ impl StdDirMemCmdCompiler{
         std::mem::swap(&mut self.main_info, &mut save_main_info);
     }
 
+    /*
+    TODO:DEL:
+    /// get reserved size of cmd that cant be math by cmd_compile (']' cause clear it may panic + if not panic it can be wrong)
+    fn reserve_special(&self, cmd: char) -> Option<usize> {
+        let valid_cmd = ValidCMD::std_parse_char(cmd);
+        if valid_cmd.is_none() { return None }
+        let valid_cmd = valid_cmd.unwrap();
+        if let  ValidCMD::EndWhileNZ = valid_cmd { 
+            let ret = self.inner_info.get_end_while_reserve_sz();
+            if ret == 0 { panic!("must be init"); }
+            Some(ret) 
+        } else { None } 
+    }
+    */
+
     /// amount of byte that max need for compile cmd_seq
     /// ## panic
     /// if it cant be compiled
@@ -129,13 +144,13 @@ impl StdDirMemCmdCompiler{
         let mut save_program = std::mem::take(&mut self.program);
         let mut len = 0; // amount of byte that max need for setting cell value 
         for cmd in cmd_seq.chars() {
-            if let None = self.cmd_compile(cmd, CompilerPos::new()) {
-                len += self.program.len();
-                self.program.clear();
-            } else {
+            if let Some(_) = self.cmd_compile(cmd, CompilerPos::new()) {
                 panic!("cant compile cmd_seq (bad char: {}) :/", cmd)
             }
         }
+        len += self.program.len();
+        if self.main_info.open_while.len() > 0 { panic!("potential [ALGO ERROR] or cmd_seq is not full") }
+        self.program.clear();
         if save_program.len() > 0 { self.program = std::mem::take(&mut save_program); }
         len
     }
@@ -211,14 +226,16 @@ impl StdDirMemCmdCompiler{
     }
 
     fn program_init(&mut self) -> Vec<u8> {
+        self.program.clear();
+        self.main_info.open_while.clear();
+
         let mut ret = self.reserve_initial_program_space();
 
         let cur_port_reg = 0;
         for x in StdCmdNames::Cur(cur_port_reg).to_u8_seq() { ret.push(x); }
         for x in StdCmdNames::Set.to_u8_seq() { ret.push(x); }
 
-        self.cancel_pseudo(Some(cur_port_reg));
-        
+        self.cancel_pseudo(Some(cur_port_reg));        
         ret
     }
 
@@ -233,16 +250,16 @@ impl StdDirMemCmdCompiler{
             *cgen_compiled_sz += 1;
         };
         let cgen_compile = |cgen: &str, mut x: Self, cgen_compiled_sz: &mut usize|{
+            println!("TODO:DEL: cgen = {}", cgen);
+            let mut save_program = std::mem::take(&mut x.program);
             for cmd in cgen.chars() {
-                let mut save_program = std::mem::take(&mut x.program);
-                if let None = x.cmd_compile(cmd, CompilerPos::new()) {
-                    std::mem::swap(&mut x.program, &mut save_program);
-                    let bytes = save_program;
-                    for byte in bytes { set_byte(&mut x, cgen_compiled_sz, byte); } 
-                } else {
+                if let Some(_) = x.cmd_compile(cmd, CompilerPos::new()) {
                     panic!("cant compile auto gen code")
                 }
             }
+            std::mem::swap(&mut x.program, &mut save_program);
+            let bytes = save_program;
+            for byte in bytes { set_byte(&mut x, cgen_compiled_sz, byte); } 
             return x;
         };
 
@@ -322,17 +339,22 @@ impl StdDirMemCmdCompiler{
 
     /// ## params
     /// + max_jump_size: if you dont know => use memory size
-    pub fn new(hardware_info: HardwareInfo) -> Self{
+    pub fn new(hardware_info: &HardwareInfo) -> Self{
         if hardware_info.max_port_amount < MIN_PORT_AMOUNT { panic!("no enough port for all std devs (need minimum ports for CEM, COM, console & win)") }
         let mut ret = Self{ 
             program: vec![],//Self::program_init(max_port_amount),
             main_info: SdmCcMainInfo::new(hardware_info.max_port_amount, hardware_info.max_jump_size),
             inner_info: SDMCCAditionalInfo::new(),
         };
+
+        let end_while_reserve_sz = ret.reserve_cmd(ValidCMD::StartWhileNZ);
+        ret.inner_info.set_end_while_reserve_sz(end_while_reserve_sz);
         let pr_res_sz = ret.reserve_one_pr_init();
         ret.inner_info.set_pr_reserve_sz(pr_res_sz);
         ret.inner_info.set_jump_pass_amount(ret.get_jump_pass_amount());
+        
         ret.program = ret.program_init();
+        println!("TODO:DEL: ---------------------------------------- THE END OF INIT ---",);
         ret
     }
 }
@@ -378,6 +400,8 @@ impl StdDirMemCmdCompiler{
 
 impl CmdCompiler<u8> for StdDirMemCmdCompiler{
     fn cmd_compile(&mut self, cmd: char, pos: CompilerPos) -> Option<CompilerErrorType> {
+        println!("TODO:DEL: cmd = {}, pos = {:?}, prog_len = {}", cmd, pos, self.program.len());
+        
         let valid_cmd = ValidCMD::std_parse_char(cmd);
         if valid_cmd.is_none() { return Some(CompilerErrorType::UnknownCmd(cmd)) }
         let valid_cmd = valid_cmd.unwrap();
@@ -480,6 +504,7 @@ impl CmdCompiler<u8> for StdDirMemCmdCompiler{
                 let prev_open = self.main_info.open_while.pop().unwrap();
 
                 let mut backward_shift_cmd_len = 0;
+                println!("TODO:DEL: cur = {}, prev = {}", cmd_pos, prev_open.cmd_pos);
                 let backward_jump = cmd_pos - prev_open.cmd_pos + self.get_jump_pass_amount();
                 for x in std_se_encoding(backward_jump) { 
                     self.program.push(x); 
@@ -488,8 +513,9 @@ impl CmdCompiler<u8> for StdDirMemCmdCompiler{
 
                 let forward_jump = backward_jump + backward_shift_cmd_len;
                 if forward_jump > self.main_info.get_max_jump_size() { return Some(CompilerErrorType::Other("too big jump".to_owned())) }
-                for (ind, x) in std_se_encoding(backward_jump).into_iter().enumerate() { 
-                    if std::mem::replace(&mut self.program[cmd_pos + ind], x) != 0x00 { panic!("[ALGO ERROR]: must be 0") }
+                for (ind, x) in std_se_encoding(forward_jump).into_iter().enumerate() { 
+                    let value_must_0 = std::mem::replace(&mut self.program[prev_open.cmd_pos + ind], x);
+                    if  value_must_0 != 0x00 { panic!("[ALGO ERROR]: must be 0; index = {}; value = {}", ind, value_must_0) }
                 }
             }
             // #############################################################
@@ -521,6 +547,8 @@ impl PortNameHandler for StdDirMemCmdCompiler{
     fn need_port_name_handle(&self) -> bool { !self.inner_info.is_all_prepared() } 
 
     fn port_name_handle(&mut self, port_names: &std::collections::HashMap<String, usize>) -> Option<CompilerErrorType> {
+        println!("TODO:DEL: ---------------------------------------- THE END OF EVANGELION ---",);
+
         for (name, port_num) in port_names {
             if let Some(x) = PrPrepared::from_name(name) {
                 if *port_num >= self.main_info.get_max_port_amount() { 

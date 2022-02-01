@@ -34,6 +34,7 @@ impl PrPrepared {
 pub(in crate::bfcg::compiler::comand_compiler)
 struct SDMCCAditionalInfo {
     one_pr_reserve_sz: usize,
+    end_while_reserve_sz: usize, // TODO:DEL
     jump_pass_amount: usize,
     pr_prepared: BoolVec,
 }
@@ -45,6 +46,7 @@ impl SDMCCAditionalInfo{
 
         let mut ret = Self {
             one_pr_reserve_sz: 0,
+            end_while_reserve_sz: 0,
             jump_pass_amount: 0,
             pr_prepared,
         };
@@ -60,6 +62,9 @@ impl SDMCCAditionalInfo{
     pub fn set_pr_reserve_sz(&mut self, sz: usize) { self.one_pr_reserve_sz = sz }
     pub fn get_pr_reserve_sz(&self) -> usize { self.one_pr_reserve_sz }
 
+    pub fn set_end_while_reserve_sz(&mut self, sz: usize) { self.end_while_reserve_sz = sz }
+    pub fn get_end_while_reserve_sz(&self) -> usize { self.end_while_reserve_sz }
+
     pub fn set_jump_pass_amount(&mut self, jump_pass_amount: usize) { self.jump_pass_amount = jump_pass_amount }
     pub fn get_jump_pass_amount(&self) -> usize { self.jump_pass_amount }
 
@@ -74,7 +79,8 @@ impl SDMCCAditionalInfo{
 impl Default for SDMCCAditionalInfo{
     fn default() -> Self {
         Self { 
-            one_pr_reserve_sz: 0, 
+            one_pr_reserve_sz: 0,
+            end_while_reserve_sz: 0, 
             jump_pass_amount: 0,
             pr_prepared: BoolVec::new() 
         }

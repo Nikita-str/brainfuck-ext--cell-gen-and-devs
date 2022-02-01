@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use bf_cell_gen::bfcg::compiler::compiler_error::CompilerError;
 use bf_cell_gen::bfcg::compiler::compiler_info::CompilerInfo;
 use bf_cell_gen::bfcg::compiler::valid_cmd::ValidCMD;
@@ -10,6 +12,7 @@ use bf_cell_gen::bfcg::compiler::{
 };
 use bf_cell_gen::bfcg::compiler::dif_part_helper::setting_action::SettingActions;
 use bf_cell_gen::bfcg::compiler::compiler_option::{CompilerOption, MemInitType};
+use bf_cell_gen::bfcg::vm::hardware_info::HardwareInfo;
 
 
 /// light compile means: empty def settings; empty MNC Holder; Interpreter CC;
@@ -55,4 +58,35 @@ fn compiler_test_ok_01() {
     if let Err(_) = result { panic!("must be ok!") }
     let result = result.ok().unwrap();
     assert_eq!(result.get_ref_program().len(), 40);
+}
+
+
+#[test]
+#[allow(unused)]
+fn compiler_test_u8_std_cmd_01() {
+    let path = "examples/compile_test/must_success/opcode_std_cmd_01.bf-ext";
+
+    let mem_init_type = MemInitType::BeforeCode;
+    let mut set_act = SettingActions::new();
+    SettingActions::add_std_actions(&mut set_act, mem_init_type);
+
+    let empty_mnc_holder_checker = HolderChekerMNC::new();
+    let hardware_info = HardwareInfo{ max_port_amount: 64, max_jump_size: 1 << 16, default_cem_port: 1, default_com_port: 2, };
+
+    let option = CompilerOption::new(
+        mem_init_type,
+        comand_compiler::StdDirMemCmdCompiler::new(&hardware_info),
+        &set_act,
+        vec![],
+        &empty_mnc_holder_checker,
+    );
+
+    let result = compiler::compile(path.to_owned(), option, None);
+    if let Err(_) = result { panic!("must be ok"); } 
+
+    let ok = result.ok().unwrap();
+    let code = ok.get_ref_program();
+    std::fs::create_dir_all("target/tmp");
+    let mut file = std::fs::File::create("target/tmp/u8_std_cmd_01.bin").ok().unwrap();
+    if file.write_all(code).is_err() { panic!("cant write in file") };
 }
