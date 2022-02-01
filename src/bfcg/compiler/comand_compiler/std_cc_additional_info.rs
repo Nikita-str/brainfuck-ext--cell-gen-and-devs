@@ -1,6 +1,6 @@
 use boolvec::BoolVec;
 
-const PREPARED_PRS: usize = super::std_dir_mem_cc::MAX_PR - 1; // -1 cause USER_PR is not prepared
+const PREPARED_PRS: usize = super::std_cc::MAX_PR - 1; // -1 cause USER_PR is not prepared
 
 #[derive(PartialEq, Eq)]
 pub(in crate::bfcg::compiler::comand_compiler)
@@ -32,21 +32,19 @@ impl PrPrepared {
  }
 
 pub(in crate::bfcg::compiler::comand_compiler)
-struct SDMCCAditionalInfo {
+struct StdCcAditionalInfo {
     one_pr_reserve_sz: usize,
-    end_while_reserve_sz: usize, // TODO:DEL
     jump_pass_amount: usize,
     pr_prepared: BoolVec,
 }
 
-impl SDMCCAditionalInfo{
+impl StdCcAditionalInfo{
     pub fn new() -> Self{
         let mut pr_prepared = BoolVec::new();
         for _ in 0..PREPARED_PRS { pr_prepared.push(false); }
 
         let mut ret = Self {
             one_pr_reserve_sz: 0,
-            end_while_reserve_sz: 0,
             jump_pass_amount: 0,
             pr_prepared,
         };
@@ -62,9 +60,6 @@ impl SDMCCAditionalInfo{
     pub fn set_pr_reserve_sz(&mut self, sz: usize) { self.one_pr_reserve_sz = sz }
     pub fn get_pr_reserve_sz(&self) -> usize { self.one_pr_reserve_sz }
 
-    pub fn set_end_while_reserve_sz(&mut self, sz: usize) { self.end_while_reserve_sz = sz }
-    pub fn get_end_while_reserve_sz(&self) -> usize { self.end_while_reserve_sz }
-
     pub fn set_jump_pass_amount(&mut self, jump_pass_amount: usize) { self.jump_pass_amount = jump_pass_amount }
     pub fn get_jump_pass_amount(&self) -> usize { self.jump_pass_amount }
 
@@ -76,11 +71,10 @@ impl SDMCCAditionalInfo{
     }
 }
 
-impl Default for SDMCCAditionalInfo{
+impl Default for StdCcAditionalInfo{
     fn default() -> Self {
         Self { 
             one_pr_reserve_sz: 0,
-            end_while_reserve_sz: 0, 
             jump_pass_amount: 0,
             pr_prepared: BoolVec::new() 
         }

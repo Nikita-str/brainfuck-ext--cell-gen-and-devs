@@ -75,7 +75,7 @@ fn compiler_test_u8_std_cmd_01() {
 
     let option = CompilerOption::new(
         mem_init_type,
-        comand_compiler::StdDirMemCmdCompiler::new(&hardware_info),
+        comand_compiler::StdCmdCompiler::new(&hardware_info),
         &set_act,
         vec![],
         &empty_mnc_holder_checker,

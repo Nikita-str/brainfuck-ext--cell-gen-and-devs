@@ -1,21 +1,21 @@
 use crate::bfcg::compiler::compiler_pos::CompilerPos;
 
-use super::std_dir_mem_cc::MAX_PR;
+use super::std_cc::MAX_PR;
 
 
 #[derive(Clone)]
-pub(in crate) struct SdmCcOpenWhile{
+pub(in crate) struct StdCcOpenWhile{
     pub compiler_pos: CompilerPos,
     pub cmd_pos: usize,
 }
 
-impl SdmCcOpenWhile{
+impl StdCcOpenWhile{
     pub fn new(compiler_pos: CompilerPos, cmd_pos: usize) -> Self { Self{ compiler_pos, cmd_pos } }
 }
 
 #[derive(Clone)]
-pub(in crate) struct SdmCcMainInfo{
-    pub open_while: Vec<SdmCcOpenWhile>,
+pub(in crate) struct StdCcMainInfo{
+    pub open_while: Vec<StdCcOpenWhile>,
     /// changed after CUR:SE on SE, this need for
     ///   
     /// ```.,..@,.rrw```
@@ -29,7 +29,7 @@ pub(in crate) struct SdmCcMainInfo{
     pub max_jump_size: usize,
 }
 
-impl SdmCcMainInfo {
+impl StdCcMainInfo {
     pub fn new(max_port_amount: usize, max_jump_size: usize) -> Self{
         Self{
             open_while: vec![],
@@ -53,7 +53,7 @@ impl SdmCcMainInfo {
     }
 }
 
-impl Default for SdmCcMainInfo {
+impl Default for StdCcMainInfo {
     fn default() -> Self {
         Self { 
             open_while: vec![], 
