@@ -12,6 +12,7 @@ use bf_cell_gen::bfcg::compiler::{
 };
 use bf_cell_gen::bfcg::compiler::dif_part_helper::setting_action::SettingActions;
 use bf_cell_gen::bfcg::compiler::compiler_option::{CompilerOption, MemInitType};
+use bf_cell_gen::bfcg::disasm::std_disasm::{std_disasm, StdDisasmInfo};
 use bf_cell_gen::bfcg::vm::hardware_info::HardwareInfo;
 
 
@@ -85,8 +86,20 @@ fn compiler_test_u8_std_cmd_01() {
     if let Err(_) = result { panic!("must be ok"); } 
 
     let ok = result.ok().unwrap();
-    let code = ok.get_ref_program();
     std::fs::create_dir_all("target/tmp");
+    let code = ok.get_ref_program();
+
+    let mut disasm_info = StdDisasmInfo::new();
+    disasm_info.std_init();
+    let disasm = std_disasm(code.into_iter(), &disasm_info); 
+    if let Ok(x) = disasm { 
+        // let mut file = std::fs::File::create("examples/compile_test/must_success/disasm_by_compiler_test_u8_std_cmd_01.disasm").ok().unwrap();
+        let mut file = std::fs::File::create("target/tmp/u8_std_cmd_01.disasm").ok().unwrap();
+        if file.write(x.as_bytes()).is_err() { panic!("cant write in file") };
+    } else if let Err(err) = disasm {
+        println!("DIS ASM ERROR: {}", err);
+    }
+
     let mut file = std::fs::File::create("target/tmp/u8_std_cmd_01.bin").ok().unwrap();
     if file.write_all(code).is_err() { panic!("cant write in file") };
 }

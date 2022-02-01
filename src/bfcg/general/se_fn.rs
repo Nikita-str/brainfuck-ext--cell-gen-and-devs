@@ -1,8 +1,8 @@
 use std::collections::LinkedList;
 
 
-const MIN_BIG_BYTE: u8 = 0x80;
-const MAX_SMALL_BYTE: u8 = !MIN_BIG_BYTE;
+pub const MIN_BIG_BYTE: u8 = 0x80;
+pub const MAX_SMALL_BYTE: u8 = !MIN_BIG_BYTE;
 const SHIFT:usize = 7;
 
 pub fn std_se_encoding(mut to_se: usize) -> LinkedList<u8>{
@@ -17,4 +17,25 @@ pub fn std_se_encoding(mut to_se: usize) -> LinkedList<u8>{
         to_se >>= SHIFT;
     }
     ret
+}
+
+pub fn std_se_decoding<Iter: Iterator<Item = u8>>(iter: Iter) -> Option<usize> {
+    let mut ret = 0;
+    let mut cur_sh = 0;
+
+    let mut started = false;
+    let mut previous_is_last = false; 
+    for mut x in iter {
+        started = true;
+        if previous_is_last && x != 0x00 { return None }
+        if x < MIN_BIG_BYTE { previous_is_last = true; } 
+        else { x = x & MAX_SMALL_BYTE; }
+
+        ret = ret + ((x as usize) << cur_sh);
+        cur_sh += SHIFT;
+    }
+
+    if !started { return None }
+    if !previous_is_last { return None }
+    Some(ret)
 }
