@@ -2,7 +2,7 @@ use std::collections::LinkedList;
 use crate::bfcg::{
     general::{se_fn::std_se_encoding, self}, 
     compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, 
-    dev_emulators::dev_utilities::{mem_dev::{CellMemDevStartAction, CmdMemDevAction}, win_dev::WinDevStartAction}, 
+    dev_emulators::dev_utilities::{mem_dev::{CellMemDevStartAction, CmdMemDevStartAction}, win_dev::WinDevStartAction}, 
     vm::hardware_info::HardwareInfo
 };
 use super::{
@@ -456,31 +456,48 @@ impl CmdCompiler<u8> for StdDirMemCmdCompiler{
                 self.ctb_unload_cur_cem(); // cause it's value can be changed
                 self.ctb_load_cur_cem(); // cause we need it's value in reg
 
+                self.ctb_set_cur_pr(MEM_CMD_PR);
+                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevStartAction::JumpForward as u8));
+                self.ctb_to(StdCmdNames::Write); // value for jump test (if 0 => jump)
+                
                 let cmd_pos = self.program.len();
                 self.main_info.open_while.push(SdmCcOpenWhile::new(pos, cmd_pos));
 
-                self.ctb_set_cur_pr(MEM_CMD_PR);
-                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevAction::StartJumpForward as u8));
-                self.ctb_to(StdCmdNames::Write); // value for jump
-                
-                // read cur se_seq (jump shift) from COM and send it to itself:
-                for _ in 0..self.get_jump_pass_amount() {
-                    self.ctb_to(StdCmdNames::Read); 
-                    self.ctb_to(StdCmdNames::Pass); // reserve space in COM for jump
-                    self.ctb_to(StdCmdNames::Write);
-                }
-
-                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevAction::BeforeEnd as u8));
-                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevAction::EndJumpForward as u8));
+                // reserve space in COM for jump:
+                for _ in 0..self.get_jump_pass_amount() { self.ctb_to(StdCmdNames::Pass); }
             }
             ValidCMD::EndWhileNZ => {
-                // ...
+                if self.main_info.open_while.is_empty() { return Some(CompilerErrorType::ClosedWhileWithoutOpen) }
+
+                self.ctb_unload_cur_cem(); // cause it's value can be changed
+                self.ctb_load_cur_cem(); // cause we need it's value in reg
+
+                self.ctb_set_cur_pr(MEM_CMD_PR);
+                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevStartAction::JumpBackward as u8));
+                self.ctb_to(StdCmdNames::Write); // value for jump test (if !0 => jump)
+
+                let cmd_pos = self.program.len();
+                let prev_open = self.main_info.open_while.pop().unwrap();
+
+                let mut backward_shift_cmd_len = 0;
+                let backward_jump = cmd_pos - prev_open.cmd_pos + self.get_jump_pass_amount();
+                for x in std_se_encoding(backward_jump) { 
+                    self.program.push(x); 
+                    backward_shift_cmd_len += 1;
+                }
+
+                let forward_jump = backward_jump + backward_shift_cmd_len;
+                if forward_jump > self.main_info.get_max_jump_size() { return Some(CompilerErrorType::Other("too big jump".to_owned())) }
+                for (ind, x) in std_se_encoding(backward_jump).into_iter().enumerate() { 
+                    if std::mem::replace(&mut self.program[cmd_pos + ind], x) != 0x00 { panic!("[ALGO ERROR]: must be 0") }
+                }
             }
             // #############################################################
             _ => panic!("unaccounted cmd {}", cmd),
         }   
              
-        // TODO: [WARNING]
+        // SOLVED : in get_program() ... self.ctb_unload_cur_cem();
+        // 0x00:
         //       in end of program we can have { cem_cur_cell_in_reg == true }
         //       so we need to self.ctb_unload_cur_cem() in end of program
         //       ---
@@ -489,7 +506,9 @@ impl CmdCompiler<u8> for StdDirMemCmdCompiler{
         None
     }
 
-    fn get_program(self) -> Result<Vec<u8>, CompilerErrorType> {
+    fn get_program(mut self) -> Result<Vec<u8>, CompilerErrorType> {
+        self.ctb_unload_cur_cem(); // cause we can have value in reg, if we want to have the same value in CEM as if it was just bf 
+
         if !self.main_info.open_while.is_empty() {
             Err(CompilerErrorType::NotClosedWhile(self.main_info.open_while.into_iter().map(|x|x.compiler_pos).collect()))
         } else {
