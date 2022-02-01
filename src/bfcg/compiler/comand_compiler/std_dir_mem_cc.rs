@@ -1,5 +1,5 @@
 use std::collections::LinkedList;
-use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, dev_emulators::dev_utilities::mem_dev::CellMemDevStartAction};
+use crate::bfcg::{general::{se_fn::std_se_encoding, self}, compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, dev_emulators::dev_utilities::{mem_dev::CellMemDevStartAction, win_dev::WinDevStartAction}};
 use super::{CmdCompiler, PortNameHandler, sdm_cc_additional_info::{SDMCCAditionalInfo, PrPrepared}, to_u8_seq::ToU8Seq, sdm_cc_main_info::SdmCcMainInfo};
 
 fn one_ll(x: u8) -> LinkedList<u8> { 
@@ -254,7 +254,13 @@ impl StdDirMemCmdCompiler{
 
         // #############################################
         // CGEN[CENTER]    (CUR + SET)
-        let cur = if let PrPrepared::Console = pr { CONSOLE_PR } else { WIN_PR };
+        let cur = 
+            match pr {
+                PrPrepared::Console => CONSOLE_PR,
+                PrPrepared::Win => WIN_PR,
+                PrPrepared::MemCell => MEM_CELL_PR,
+                PrPrepared::MemCmd => MEM_CMD_PR,
+            };
         for byte in StdCmdNames::Cur(cur).to_u8_seq() { set_byte(self, &mut cgen_compiled_sz, byte); }
         for byte in StdCmdNames::Set.to_u8_seq() { set_byte(self, &mut cgen_compiled_sz, byte); }
 
@@ -325,6 +331,7 @@ impl StdDirMemCmdCompiler{
     #[inline]
     fn ctb_set_cur_pr(&mut self, new_cur_pr: usize) {
         if new_cur_pr == self.get_cur_pr() { return }
+        if new_cur_pr >= MAX_PR { panic!("ALGO ERROR: invalid port reg") }
         self.ctb_to(StdCmdNames::Cur(new_cur_pr));
         self.set_cur_pr(new_cur_pr);
     }
@@ -334,8 +341,18 @@ impl StdDirMemCmdCompiler{
         if self.get_cem_cur_cell_in_reg() { return }
         self.ctb_set_cur_pr(MEM_CELL_PR);
         self.ctb_to(StdCmdNames::ConstWrite(CellMemDevStartAction::GetCellValue as u8)); 
+        self.ctb_to(StdCmdNames::Read);
         self.set_cem_cur_cell_in_reg(true);
     }
+
+    #[inline]
+    fn ctb_unload_cur_cem(&mut self) {
+        if !self.get_cem_cur_cell_in_reg() { return }
+        self.ctb_set_cur_pr(MEM_CELL_PR);
+        self.ctb_to(StdCmdNames::ConstWrite(CellMemDevStartAction::SetCellValue as u8)); 
+        self.ctb_to(StdCmdNames::Write);
+    }
+
 }
 // - [COMPILE TO BYTE] 
 // ------------------------------------------
@@ -346,20 +363,85 @@ impl CmdCompiler<u8> for StdDirMemCmdCompiler{
         if valid_cmd.is_none() { return Some(CompilerErrorType::UnknownCmd(cmd)) }
         let valid_cmd = valid_cmd.unwrap();
 
-        if let Some(reg_cmd) = RegCmdNames::try_from_valid_cmd(valid_cmd) {
-            if !self.get_cem_cur_cell_in_reg() { 
-                self.ctb_load_cur_cem();
-            }
-            for x in reg_cmd.to_u8_seq() { self.program.push(x) }
+        if let Some(reg_cmd) = RegCmdNames::try_from_valid_cmd(valid_cmd.clone()) {
+            self.ctb_load_cur_cem();
+            self.ctb_to(reg_cmd);
             return None
         }
 
-        /* 
-        match valid_cmd.unwrap() {
-            ValidCMD::NextCell => {
+        
+        // {*1}: we can not unload value cause it will rewrite by this op
+        // {*2}: cur value must be in reg
+        
+        match valid_cmd {
+            ValidCMD::NextCell | ValidCMD::PrevCell | ValidCMD::CreateCell | ValidCMD::DeleteCell => {
+                self.ctb_unload_cur_cem();
+                
+                self.ctb_set_cur_pr(MEM_CELL_PR);
+                self.ctb_to(StdCmdNames::ConstWrite(CellMemDevStartAction::from_valid_cmd(&valid_cmd) as u8));
+
+                if let ValidCMD::CreateCell = valid_cmd {
+                    self.ctb_to(RegCmdNames::Zero);
+                    self.set_cem_cur_cell_in_reg(true);
+                } else {
+                    self.set_cem_cur_cell_in_reg(false);
+                }
             }
+            ValidCMD::DecCoordX | ValidCMD::DecCoordY | ValidCMD::IncCoordX | ValidCMD::IncCoordY | ValidCMD::RedrawWin => {
+                self.ctb_set_cur_pr(WIN_PR);
+                self.ctb_to(StdCmdNames::ConstWrite(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8));
+            }
+            ValidCMD::SetWinValue => {
+                self.ctb_load_cur_cem(); // {*2}
+                self.ctb_set_cur_pr(WIN_PR);
+                self.ctb_to(StdCmdNames::ConstWrite(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8));
+                self.ctb_to(StdCmdNames::Write);
+            }
+            // #############################################################
+            ValidCMD::PrintValue => {
+                self.ctb_load_cur_cem(); // {*2}
+                self.ctb_set_cur_pr(CONSOLE_PR);
+                self.ctb_to(StdCmdNames::Write);
+            }
+            ValidCMD::ReadValue => {
+                // check {*1}
+                self.ctb_set_cur_pr(CONSOLE_PR);
+                self.ctb_to(StdCmdNames::Read);
+                self.set_cem_cur_cell_in_reg(true);
+            }
+            // #############################################################
+            ValidCMD::TestPort => {
+                // check {*1}
+                self.ctb_set_cur_pr(USER_PR);
+                self.ctb_to(StdCmdNames::Test);
+                self.set_cem_cur_cell_in_reg(true);
+            }
+            ValidCMD::ReadFromPort => {
+                // check {*1}
+                self.ctb_set_cur_pr(USER_PR);
+                self.ctb_to(StdCmdNames::Read);
+                self.set_cem_cur_cell_in_reg(true);
+            }
+            ValidCMD::WriteIntoPort => {
+                self.ctb_load_cur_cem(); // {*2}
+                self.ctb_set_cur_pr(USER_PR);
+                self.ctb_to(StdCmdNames::Write);
+            }
+            ValidCMD::SetCurPort => { // TODO:??? all ok ???
+                self.ctb_unload_cur_cem();
+                self.ctb_set_cur_pr(USER_PR);
+                self.ctb_to(StdCmdNames::Set);
+            }
+            // #############################################################
+
+            _ => panic!("unaccounted cmd {}", cmd),
         }   
-        */     
+             
+        // TODO: [WARNING]
+        //       in end of program we can have { cem_cur_cell_in_reg == true }
+        //       so we need to self.ctb_unload_cur_cem() in end of program
+        //       ---
+        //       we can do this by adding '> <' in the end of code
 
         None
     }

@@ -1,3 +1,5 @@
+use crate::bfcg::compiler::valid_cmd::ValidCMD;
+
 
 #[repr(u8)]
 pub enum CellMemDevStartAction {
@@ -9,6 +11,18 @@ pub enum CellMemDevStartAction {
     
     CreateCell = 0x05,
     DeleteCell = 0x06,
+}
+
+impl CellMemDevStartAction{
+    pub fn from_valid_cmd(cmd: &ValidCMD) -> Self{
+        match cmd {
+            ValidCMD::NextCell => Self::NextCell,
+            ValidCMD::PrevCell => Self::PrevCell,
+            ValidCMD::CreateCell => Self::CreateCell,
+            ValidCMD::DeleteCell => Self::DeleteCell,
+            _ => panic!("not cell-mem-dev cmd"),
+        }
+    }
 }
 
 

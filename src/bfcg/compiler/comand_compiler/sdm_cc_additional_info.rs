@@ -6,12 +6,16 @@ pub(in crate::bfcg::compiler::comand_compiler)
 enum PrPrepared {
     Console,
     Win,
+    MemCell,
+    MemCmd,
 }
 impl PrPrepared { 
     pub fn to_index(&self) -> usize { 
         match self{
             PrPrepared::Console => 0,
             PrPrepared::Win => 1,
+            PrPrepared::MemCell => 2,
+            PrPrepared::MemCmd => 3,
         }
     }
 
@@ -19,6 +23,8 @@ impl PrPrepared {
         match name {
             "console" => Some(Self::Console),
             "win" | "screen" | "display" => Some(Self::Win),
+            "cell" | "cem" => Some(Self::MemCell),
+            "cmd" | "com" => Some(Self::MemCmd),
             _ => None,
         }
     }
