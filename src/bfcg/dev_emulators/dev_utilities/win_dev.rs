@@ -10,7 +10,7 @@ pub enum WinDevStartAction {
     
     RedrawWin = 13, 
 
-    SetWinValue = 42, 
+    SetWinValue = 15, 
 }
 
 impl WinDevStartAction{
