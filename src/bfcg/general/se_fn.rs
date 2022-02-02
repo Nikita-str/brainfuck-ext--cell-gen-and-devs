@@ -31,7 +31,7 @@ pub fn std_se_decoding<Iter: Iterator<Item = u8>>(iter: Iter) -> Option<usize> {
         if x < MIN_BIG_BYTE { previous_is_last = true; } 
         else { x = x & MAX_SMALL_BYTE; }
 
-        ret = ret + ((x as usize) << cur_sh);
+        ret = ret | ((x as usize) << cur_sh);
         cur_sh += SHIFT;
     }
 
