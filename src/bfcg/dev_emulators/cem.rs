@@ -98,7 +98,7 @@ impl CemInner{
         if x == AMOUNT_MAX { 
             self.order_mem[self.om_mm_pos] = om_x | (1 << MM_OF_SHIFT);
             self.om_inc_mm_pos();
-            om_x = 0x00;
+            om_x = self.order_mem[self.om_mm_pos];
             x = 0;
         } 
         let x = x + 1;
@@ -113,7 +113,7 @@ impl CemInner{
         if moved { 
             self.order_mem[self.om_am_pos] = om_x | (1 << AM_OF_SHIFT);
             self.om_inc_am_pos();
-            om_x = 0x00;
+            om_x = self.order_mem[self.om_am_pos];
             x = 0;
         } 
         let x = x + 1;
@@ -348,24 +348,32 @@ impl CemInner{
 
             self.reg_con_amount = 0;
             // [NOT NECESSARY]
-            let mut need_null_mm_of = self.try_pseudo_mm_del(on_con_end);
+            let need_null_mm_of = self.try_pseudo_mm_del(on_con_end);
 
-            if !self.cur_con_prev_overflow() { 
-                self.trig_cur_am = !self.trig_cur_am;
-                need_null_mm_of = false;
-            }
+            let overflow = self.cur_con_prev_overflow();
 
             if self.trig_cur_am {
-                self.am_pos = Some(self.am_pos.unwrap() - 1);
-                self.om_am_pos -= 1;
-                self.reg_con_amount = (self.order_mem[self.om_am_pos] >> AM_AMOUNT_SHIFT) & AMOUNT_MAX;
+                if self.am_pos == Some(0) { self.am_pos = None; } 
+                else { 
+                    self.am_pos = Some(self.am_pos.unwrap() - 1); 
+                    self.om_am_pos -= 1;
+                }
             } else {
                 self.mm_pos -= 1;
                 self.om_mm_pos -= 1;
-                self.reg_con_amount = (self.order_mem[self.om_mm_pos] >> MM_AMOUNT_SHIFT) & AMOUNT_MAX;
                 // if need nullify MM OF-flag:
                 if need_null_mm_of { self.order_mem[self.om_mm_pos]  = self.order_mem[self.om_mm_pos] & !(1 << MM_OF_SHIFT); }
+            }      
+
+            if !overflow { 
+                self.trig_cur_am = !self.trig_cur_am;
             }
+            
+            let (pos, sh) = if self.trig_cur_am { (self.om_am_pos, AM_AMOUNT_SHIFT) } else { (self.om_mm_pos, MM_AMOUNT_SHIFT) };
+            self.reg_con_amount = (self.order_mem[pos] >> sh) & AMOUNT_MAX;
+
+            //TODO:DEL: #[cfg(test)]{tests::full_print(self);}
+            //println!("TODO:DEL: {}", self.reg_con_amount);
         } else {
             self.reg_con_amount -= 1;
             if self.trig_cur_am { 
@@ -411,16 +419,26 @@ impl CemInner{
 
         self.additional_mem.push(0x00);
 
+        let mut need_inc = true;
         let con_amount_save = self.reg_con_amount;
 
-        if !self.trig_cur_am { self.om_mm_transfer(); } 
+        if !self.trig_cur_am { 
+            self.om_mm_transfer();
+            if self.am_pos.is_some() {
+                self.om_am_pos += 1;
+                if self.om_am_pos > self.om_mm_pos { self.order_mem.push(0x00); }
+                self.order_mem[self.om_am_pos] = self.order_mem[self.om_am_pos] | (1 << AM_AMOUNT_SHIFT); 
+                self.om_am_pos -= 1;
+                need_inc = false;
+            }
+        } 
         //TODO:DEL: if !self.trig_cur_am && self.am_pos.is_none() { } else { } ???
         
-        self.om_inc_am_con();
+        if need_inc { self.om_inc_am_con(); }
         self.reg_con_amount = con_amount_save;
 
-        //TODO:DEL: #[cfg(test)]{tests::full_print(self);}
         self.next_cell();
+        if !need_inc { self.am_last_clear_pos = self.am_pos; }
         
         // TODO:STOP HERE
     }
@@ -473,8 +491,14 @@ impl CemInner {
 
 
 
-// ---------------------------------------------------------
-// TEST
+// |-----------------------------------------------|-------|
+// |        TTTTT   EEEEE      SSSS    TTTTT       |   ∥   |
+// |          T     E         S          T         |   ∥   |
+// |          T     EEEEE      SSS       T         |   ∥   |
+// |          T     E             S      T         |  \∥/  |
+// |          T     EEEEE     SSSS       T         |   V   |
+// |-----------------------------------------------|-------|
+
 
 #[cfg(test)]
 pub mod tests {
@@ -534,6 +558,7 @@ pub mod tests {
 
     #[test]
     fn test_cem_02(){
+        let const_mem = "|00|01|02|03|04|05|06|07|08|09|0A|0B|0C|0D|0E|0F|10|11|12|13|14|15|16|17|18|19|1A|1B|1C|1D|1E|1F|00|...";
         let mut cem = CemInner::new(1024, 1024);
         for i in 0..31 {
             cem.next_cell();
@@ -550,7 +575,7 @@ pub mod tests {
         cem.set_value(0xAB);
         assert_eq!(&cem.print_om(0), "|T7F2|T7F0|F2F0|T7F0|T7F0|F2F0|F0F0|...");
         assert_eq!(&cem.print_am(0), "|AC|AB|00|...");
-        assert_eq!(&cem.print_mm(0), "|00|01|02|03|04|05|06|07|08|09|0A|0B|0C|0D|0E|0F|10|11|12|13|14|15|16|17|18|19|1A|1B|1C|1D|1E|1F|00|...");
+        assert_eq!(&cem.print_mm(0), const_mem);
         
         cem.create_cell();
         cem.prev_cell();
@@ -570,16 +595,12 @@ pub mod tests {
         cem.prev_cell();
         assert_eq!(cem.am_pos, Some(0));
         assert_eq!(cem.trig_cur_am, true);
-        full_print(&cem);
         cem.prev_cell();
-        assert_eq!(cem.am_pos, Some(0));
+        assert_eq!(cem.am_pos, None);
         assert_eq!(cem.trig_cur_am, false);
-        println!("ABOBA START HERE:");
-        full_print(&cem);
         cem.prev_cell();
-        assert_eq!(cem.am_pos, Some(0));
+        assert_eq!(cem.am_pos, None);
         assert_eq!(cem.trig_cur_am, false);
-        full_print(&cem);
         for _ in 0..4 { 
             cem.prev_cell(); 
             assert_eq!(cem.trig_cur_am, false);
@@ -590,7 +611,6 @@ pub mod tests {
         }
         cem.next_cell();
         cem.next_cell();
-        full_print(&cem);
         assert_eq!(cem.trig_cur_am, true);
         assert_eq!(cem.am_pos, Some(0));
         assert_eq!(cem.trig_am_can_create, false);
@@ -604,9 +624,128 @@ pub mod tests {
         cem.set_value(0xFF);
         assert_eq!(cem.am_last_clear_pos, Some(5));
         assert_eq!(&cem.print_am(0), "|AC|AB|00|00|00|FF|00|...");
+        assert_eq!(&cem.print_om(0), "|T7F6|T7F0|F2F0|T7F0|T7F0|F2F0|F0F0|...");
+        
+        cem.next_cell();
+        assert_eq!(cem.am_pos, Some(5));
+        assert_eq!(cem.trig_cur_am, false);
+        assert_eq!(cem.get_value(), Some(0x10));
+        cem.set_value(0x10);
+        assert_eq!(&cem.print_mm(0), const_mem);
+        for _ in 0..0x0F { 
+            cem.next_cell();
+            assert_eq!(cem.trig_cur_am, false);
+            assert_eq!(cem.trig_am_can_create, true);
+        }
+        assert_eq!(cem.am_pos, Some(5));
+        assert_eq!(cem.get_value(), Some(0x1F));
+        assert_eq!(cem.stay_on_the_end(), true);
+
+        for _ in 0..0x0F { cem.prev_cell(); }
+        assert_eq!(cem.trig_cur_am, false);
+        assert_eq!(cem.trig_am_can_create, true);
+        assert_eq!(cem.get_value(), Some(0x10));
+        cem.prev_cell();
+        assert_eq!(cem.trig_cur_am, true);
+        assert_eq!(cem.trig_am_can_create, true);
+        assert_eq!(cem.get_value(), Some(0xFF));
+        for _ in 0..5 { 
+            cem.prev_cell(); 
+            assert_eq!(cem.trig_am_can_create, false);
+        }
+        assert_eq!(cem.trig_cur_am, true);
+        assert_eq!(cem.get_value(), Some(0xAC));
+        cem.prev_cell();
+        assert_eq!(cem.trig_cur_am, false);
+        assert_eq!(cem.get_value(), Some(0x0F));
+
+        for _ in 0..0x0F { cem.prev_cell(); }
+        assert_eq!(cem.stay_on_the_start(), true);
+
+        for _ in 0..(0x0F + 1 + 5 + 1 + 5) { cem.next_cell(); }
+        assert_eq!(cem.get_value(), Some(0x15));
+        assert_eq!(cem.trig_cur_am, false);
+        assert_eq!(cem.trig_am_can_create, true);
+
+        for i in 0..10 {
+            cem.create_cell();
+            cem.set_value(10 - i);
+        }
+        assert_eq!(&cem.print_om(0), "|T7F6|T7T7|F2F3|F6F0|T7F0|F3F0|F0F0|...");
+        assert_eq!(&cem.print_am(0),  "|AC|AB|00|00|00|FF|0A|09|08|07|06|05|04|03|02|01|00|...");
+        assert_eq!(&cem.print_mm(0), const_mem);
+        assert_eq!(cem.stay_on_the_start(), false);
+        assert_eq!(cem.stay_on_the_end(), false);
+
+        // go to mem end:
+        for _ in 0x16..0x20 { cem.next_cell(); } 
+        assert_eq!(cem.stay_on_the_end(), true);
+
+        // check all memory when go backward:
+        for x in (0x16..0x20).rev() { 
+            assert_eq!(cem.get_value(), Some(x));
+            cem.prev_cell(); 
+        }
+        for x in 0..10 { 
+            assert_eq!(cem.get_value(), Some(x + 1));
+            cem.prev_cell(); 
+        }
+        for x in (0x10..=0x15).rev() { 
+            assert_eq!(cem.get_value(), Some(x));
+            cem.prev_cell(); 
+        }
+        assert_eq!(cem.get_value(), Some(0xFF));
+        cem.prev_cell(); 
+        for _ in 0..3 { 
+            assert_eq!(cem.get_value(), Some(0x00));
+            cem.prev_cell(); 
+        }
+        let ab = cem.get_value().unwrap();
+        cem.prev_cell();
+        let ac = cem.get_value().unwrap();
+        cem.prev_cell(); 
+        assert_eq!((ac, ab), (0xAC, 0xAB));
+        for x in (0x01..0x10).rev() { 
+            assert_eq!(cem.get_value(), Some(x));
+            cem.prev_cell(); 
+        }
+        assert_eq!(cem.get_value(), Some(0x00));
+        assert_eq!(cem.stay_on_the_start(), true);
+
+        // check all memory when go forward:
+        for x in 0x00..0x10 { 
+            assert_eq!(cem.get_value(), Some(x));
+            cem.next_cell(); 
+        }
+        let ac = cem.get_value().unwrap();
+        cem.next_cell();
+        let ab = cem.get_value().unwrap();
+        cem.next_cell(); 
+        assert_eq!((ac, ab), (0xAC, 0xAB));
+        for _ in 0..3 { 
+            assert_eq!(cem.get_value(), Some(0x00));
+            cem.next_cell(); 
+        }
+        assert_eq!(cem.get_value(), Some(0xFF));
+        cem.next_cell();
+        for x in 0x10..=0x15 { 
+            assert_eq!(cem.get_value(), Some(x));
+            cem.next_cell(); 
+        }
+        for x in 0..10 { 
+            assert_eq!(cem.get_value(), Some(10 - x));
+            cem.next_cell(); 
+        }
+        for x in 0x16..0x20 { 
+            assert_eq!(cem.get_value(), Some(x));
+            cem.next_cell(); 
+        }
+        assert_eq!(cem.get_value(), Some(0x00));
+        cem.prev_cell(); 
+
 
         assert_eq!(cem.error(), false);
-
+        assert_eq!(cem.print_mm(0), const_mem);
         full_print(&cem);
     }
 }
