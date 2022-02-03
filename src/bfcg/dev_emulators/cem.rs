@@ -89,7 +89,7 @@ impl CemInner{
 
     fn om_inc_am_pos(&mut self) {
         self.om_am_pos += 1;
-        if self.om_am_pos > self.om_mm_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
+        if self.om_am_pos > self.om_mm_end_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
     }
 
     fn om_inc_mm_con(&mut self) {
@@ -164,7 +164,13 @@ impl CemInner{
                 self.order_mem[self.om_mm_end_pos] = (om_x & !MM_AMOUNT_MASK) | (new_val << MM_AMOUNT_SHIFT);
             }
         } else {
-            //TODO
+            let om_x = self.order_mem[self.om_mm_end_pos];
+            if ((om_x >> MM_OF_SHIFT) & 1) == 1 { panic!("[ALGO ERROR]") }
+
+            self.om_mm_end_pos += 1;
+            if self.om_mm_end_pos > self.om_am_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
+            let om_x = self.order_mem[self.om_mm_end_pos];
+            self.order_mem[self.om_mm_end_pos] = (om_x & !MM_AMOUNT_MASK) | (transfer << MM_AMOUNT_SHIFT);
         }
     }
 }
@@ -238,7 +244,7 @@ impl CemInner{
                 (((self.order_mem[self.om_am_pos + 1] >> AM_AMOUNT_SHIFT) & AMOUNT_MAX) == 0))
             };
         
-        let mm_can_be_end = (self.mm_pos == (self.mm_size - 1)) 
+        let mm_can_be_end = (self.mm_pos == (self.mm_size - 1))
             || (self.order_mem.len() == self.om_mm_pos + 1)
             || (((self.order_mem[self.om_mm_pos + 1] >> MM_AMOUNT_SHIFT) & AMOUNT_MAX) == 0);
 
@@ -380,7 +386,6 @@ impl CemInner{
             self.reg_con_amount = (self.order_mem[pos] >> sh) & AMOUNT_MAX;
 
             //TODO:DEL: #[cfg(test)]{tests::full_print(self);}
-            //println!("TODO:DEL: {}", self.reg_con_amount);
         } else {
             self.reg_con_amount -= 1;
             if self.trig_cur_am { 
@@ -433,7 +438,7 @@ impl CemInner{
             self.om_mm_transfer();
             if self.am_pos.is_some() {
                 self.om_am_pos += 1;
-                if self.om_am_pos > self.om_mm_pos { self.order_mem.push(0x00); }
+                if self.om_am_pos > self.om_mm_end_pos { self.order_mem.push(0x00); }
                 self.order_mem[self.om_am_pos] = self.order_mem[self.om_am_pos] | (1 << AM_AMOUNT_SHIFT); 
                 self.om_am_pos -= 1;
             } else {
@@ -796,6 +801,59 @@ pub mod tests {
         assert_eq!(&cem.print_am(0), "|00|00|00|00|...");
 
         assert_eq!(cem.error(), false);
+        full_print(&cem);
+    }
+
+    #[test]
+    fn test_cem_04(){
+        let mut cem = CemInner::new(1024, 1024);
+        cem.set_value(0xFF);
+        cem.next_cell();
+        cem.set_value(0xFF);
+        cem.next_cell();
+        cem.set_value(0xFF);
+        assert_eq!(cem.stay_on_the_end(), true);
+
+        cem.prev_cell();
+        cem.prev_cell();
+
+        for x in 0..15 { 
+            cem.create_cell();
+            cem.set_value(0xA0 + x);
+            assert_eq!(cem.stay_on_the_end(), false);
+        }
+        cem.next_cell();
+        for x in 0..15 { 
+            cem.create_cell();
+            cem.set_value(0xB0 + x);
+            assert_eq!(cem.stay_on_the_end(), false);
+        }
+        cem.next_cell();
+        assert_eq!(cem.stay_on_the_end(), true);
+        
+        for _ in 0..(15+15+2) { cem.prev_cell(); } 
+        assert_eq!(cem.stay_on_the_start(), true);
+        
+        assert_eq!(cem.get_value(), Some(0xFF));
+        for x in 0..15 {
+            cem.next_cell();
+            assert_eq!(cem.get_value(), Some(0xA0 + x));
+        }
+        cem.next_cell();
+        assert_eq!(cem.get_value(), Some(0xFF));
+        for x in 0..15 {
+            cem.next_cell();
+            assert_eq!(cem.get_value(), Some(0xB0 + x));
+        }
+        cem.next_cell();
+        assert_eq!(cem.get_value(), Some(0xFF));
+        assert_eq!(cem.stay_on_the_end(), true);
+
+
+        assert_eq!(cem.error(), false);
+        assert_eq!(&cem.print_om(0), "|F1T7|F1T7|F1F1|F0T7|F0T7|F0F1|F0F0|...");
+        assert_eq!(&cem.print_mm(0), "|FF|FF|FF|00|...");
+        assert_eq!(&cem.print_am(0), "|A0|A1|A2|A3|A4|A5|A6|A7|A8|A9|AA|AB|AC|AD|AE|B0|B1|B2|B3|B4|B5|B6|B7|B8|B9|BA|BB|BC|BD|BE|00|...");
         full_print(&cem);
     }
 }
