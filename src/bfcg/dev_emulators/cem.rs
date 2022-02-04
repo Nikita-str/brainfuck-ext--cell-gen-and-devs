@@ -216,8 +216,8 @@ impl CemInner{
             self.order_mem[self.om_mm_end_pos] &= !MM_AMOUNT_MASK;
             if self.order_mem[self.om_mm_end_pos] == 0x00 { self.order_mem.pop(); }
             self.om_mm_end_pos -= 1;
-            self.order_mem[self.om_mm_end_pos] &= !(1 << MM_OF_SHIFT);
             if (self.order_mem[self.om_mm_end_pos] >> MM_AMOUNT_SHIFT) != 0x0F { panic!("[ALGO ERROR]") } 
+            self.order_mem[self.om_mm_end_pos] &= !(1 << MM_OF_SHIFT);
             self.order_mem[self.om_mm_end_pos] &= !MM_AMOUNT_MASK;
             self.order_mem[self.om_mm_end_pos] |=  (AMOUNT_MAX - delta) << MM_AMOUNT_SHIFT;
         }
@@ -467,7 +467,7 @@ impl CemInner{
         }
     }
 
-    pub fn get_value(&mut self) -> Option<u8> {
+    pub fn get_value(&self) -> Option<u8> {
         if self.error { return None }
         if self.trig_cur_am { Some(self.additional_mem[self.am_pos.unwrap()]) }
         else { Some(self.main_mem[self.mm_pos]) }
@@ -584,7 +584,7 @@ impl CemInner{
             self.additional_mem.pop();
             if stay_first && !need_mm_glue { self.next_cell(); }
 
-            self.am_pos = if am_pos == 0 { None } else { Some(am_pos - 1) };
+            //self.am_pos = if am_pos == 0 { None } else { Some(am_pos - 1) };
             self.am_last_clear_pos = self.am_pos;
             self.trig_am_can_create = true;
         }
@@ -1063,6 +1063,25 @@ pub mod tests {
         assert_eq!(cem.get_value(), Some(0xC1));
         cem.create_cell();
 
+        if version == 2 || version == 3 || version == 4 || version == 5 {
+            cem.prev_cell();
+            cem.prev_cell();
+            cem.prev_cell();
+            cem.prev_cell();
+            assert_eq!(cem.error(), false);
+            assert_eq!(cem.get_value(), Some(0xAB));
+            if version == 2 { cem.create_cell(); }
+            if version == 3 { cem.delete_cell(); }
+            if version == 4  || version == 5 { 
+                cem.next_cell();
+                assert_eq!(cem.get_value(), Some(0x02));
+                if version == 4 { cem.delete_cell(); }
+                else { cem.create_cell(); } 
+            }
+            assert_eq!(cem.error(), true);
+            return
+        }
+
         cem.next_cell();
         cem.create_cell();
         cem.delete_cell();
@@ -1097,6 +1116,264 @@ pub mod tests {
     #[test]    
     fn test_cem_06() {
         test_cem_06_helper(1);
+        
+        test_cem_06_helper(2);
+        test_cem_06_helper(3);
+        test_cem_06_helper(4);
+        test_cem_06_helper(5);
+
         test_cem_06_helper(0);
     }
+
+    #[test]    
+    fn test_cem_07() {
+        let check_only_first = |x: &CemInner| {
+            assert_eq!(x.get_value(), Some(0x11));
+            assert_eq!(x.print_om(0), "|F1F0|F0F0|...");
+            assert_eq!(x.print_mm(0), "|11|00|...");
+            assert_eq!(x.print_am(0), "|00|...");
+            assert_eq!(x.trig_cur_am, false);
+            assert_eq!(x.error(), false);
+            assert_eq!(x.am_pos, None);
+            assert_eq!(x.am_last_clear_pos, None);
+            assert_eq!(x.om_am_pos, 0);
+            assert_eq!(x.om_mm_pos, 0);
+            assert_eq!(x.om_am_end_pos, 0);
+            assert_eq!(x.om_mm_end_pos, 0);
+        };
+
+        let mut cem = CemInner::new(1024, 1024);
+        cem.set_value(0x11);
+        check_only_first(&cem);
+
+        // M : main mem cell
+        // A : addi clear mem cell
+        // D : addi dirty mem cell
+
+        //  del        here
+        //   ↓    then  ↓
+        // M A          M
+        cem.create_cell();
+        assert_eq!(cem.print_om(0), "|F1F1|F0F0|...");
+        assert_eq!(cem.print_mm(0), "|11|00|...");
+        assert_eq!(cem.print_am(0), "|00|00|...");
+        assert_eq!(cem.trig_cur_am, true);
+        cem.delete_cell();
+        check_only_first(&cem);
+
+        
+        //  del        here
+        //   ↓    then  ↓
+        // M D          M
+        cem.create_cell();
+        cem.set_value(0x33);
+        cem.delete_cell();
+        check_only_first(&cem);
+
+        
+        //  del         {here+del}       here
+        //   ↓     then     ↓       then  ↓
+        // M D A          M A             M
+        cem.create_cell();
+        cem.create_cell();
+        cem.prev_cell();
+        cem.set_value(0x33);
+        assert_eq!(cem.print_am(0), "|33|00|00|...");
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0x00));
+        cem.delete_cell();
+        check_only_first(&cem);
+
+        //    del         {here+del}         here
+        //     ↓     then     ↓         then  ↓
+        // M D D A          M D A             M
+        cem.create_cell();
+        cem.create_cell();
+        cem.prev_cell();
+        cem.create_cell();
+        cem.set_value(0x44);
+        cem.prev_cell();
+        cem.set_value(0x33);
+        assert_eq!(cem.print_am(0), "|33|44|00|00|...");
+        cem.next_cell();
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0x33));
+        assert_eq!(cem.print_am(0), "|33|00|00|...");
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0x00));
+        assert_eq!(cem.print_am(0), "|00|00|...");
+        cem.delete_cell();
+        check_only_first(&cem);
+
+
+        //        del            {here+del}       {here+del}      here
+        //         ↓      then        ↓     then      ↓      ...   ↓ 
+        // M D A A A A          M D A A A         M D A A          M
+        cem.create_cell();  //D
+        cem.set_value(0x33);
+        cem.create_cell();  //A[1]
+        cem.create_cell();  //A[2]
+        cem.create_cell();  //A[3]
+        cem.create_cell();  //A[4]
+        cem.prev_cell();    //cur : A[3]
+        assert_eq!(cem.am_pos, Some(3));
+        assert_eq!(cem.print_am(0), "|33|00|00|00|00|00|...");
+        assert_eq!(cem.print_om(0), "|F1F5|F0F0|...");
+        cem.delete_cell();
+        assert_eq!(cem.print_am(0), "|33|00|00|00|00|...");
+        assert_eq!(cem.am_pos, Some(2));
+        assert_eq!(cem.get_value(), Some(0x00));
+        cem.delete_cell();
+        assert_eq!(cem.print_am(0), "|33|00|00|00|...");
+        assert_eq!(cem.am_pos, Some(1));
+        assert_eq!(cem.get_value(), Some(0x00));
+        cem.delete_cell();
+        assert_eq!(cem.print_am(0), "|33|00|00|...");
+        assert_eq!(cem.am_pos, Some(0));
+        assert_eq!(cem.get_value(), Some(0x33));
+        cem.delete_cell();
+        assert_eq!(cem.print_am(0), "|00|00|...");
+        assert_eq!(cem.am_pos, Some(0));
+        assert_eq!(cem.get_value(), Some(0x00));
+        cem.delete_cell();
+        check_only_first(&cem);
+
+
+        //          del                     
+        //           ↓                  
+        //      M DAAAA AAAAA AAAAA A   
+        //then   
+        //                     del            
+        //                      ↓        
+        //      M DAAAA DAAAA DAAAA    
+        //then   
+        // ...
+        for ind in 0..16 {
+            cem.create_cell();
+            if ind == 0 { cem.set_value(5); }
+        }
+        assert_eq!(cem.print_om(0), "|F1T7|F0T7|F0F2|F0F0|...");
+        assert_eq!(cem.print_mm(0), "|11|00|...");
+        assert_eq!(cem.print_am(0), "|05|00|00|00|00|00|00|00|00|00|00|00|00|00|00|00|00|...");
+        for _ in 0..12 { cem.prev_cell(); }
+        assert_eq!(cem.am_pos, Some(3));
+        cem.delete_cell();
+        assert_eq!(cem.am_pos, Some(2));
+        assert_eq!(cem.print_om(0), "|F1T7|F0T7|F0F1|F0F0|...");
+        assert_eq!(cem.print_mm(0), "|11|00|...");
+        assert_eq!(cem.print_am(0), "|05|00|00|00|00|00|00|00|00|00|00|00|00|00|00|00|...");
+
+        cem.next_cell();
+        cem.next_cell();
+        cem.create_cell();
+        cem.set_value(0x0A);
+        for _ in 0..5 { cem.next_cell(); }
+        cem.set_value(0x0F);
+        cem.next_cell();
+        cem.delete_cell();
+        cem.next_cell();
+        cem.next_cell();
+        assert_eq!(cem.print_om(0), "|F1T7|F0T7|F0F1|F0F0|...");
+        assert_eq!(cem.print_mm(0), "|11|00|...");
+        assert_eq!(cem.print_am(0), "|05|00|00|00|00|0A|00|00|00|00|0F|00|00|00|00|00|...");
+        assert_eq!(cem.am_pos, Some(12));
+        assert_eq!(cem.am_last_clear_pos, Some(10));
+
+        cem.delete_cell();
+        assert_eq!(cem.am_pos, Some(11));
+        assert_eq!(cem.am_last_clear_pos, Some(10));
+        cem.delete_cell();
+        assert_eq!(cem.am_pos, Some(10));
+        assert_eq!(cem.am_last_clear_pos, Some(10));
+        assert_eq!(cem.get_value(), Some(0x0F));
+        for ind in 0..10 { 
+            cem.delete_cell(); 
+            assert_eq!(cem.am_last_clear_pos, Some(9 - ind));
+            assert_eq!(cem.am_pos, Some(9 - ind));
+        }
+        assert_eq!(cem.print_om(0), "|F1F3|F0F0|...");
+        assert_eq!(cem.print_am(0), "|05|00|00|00|...");
+        cem.delete_cell();
+        assert_eq!(cem.am_pos, Some(0));
+        for _ in 0..2 { cem.delete_cell(); }
+        check_only_first(&cem);
+    }
+
+    #[test]
+    fn test_cem_08() {
+        let move_to_start = |cem: &mut CemInner| {
+            loop { 
+                cem.prev_cell();
+                if cem.get_value() == Some(0x01) { break; }  
+            }
+        };
+
+        let move_forward = |cem: &mut CemInner, step: usize| {
+            for _ in 0..step { cem.next_cell(); }
+        };
+
+        let move_forward_while = |cem: &mut CemInner, value: u8| {
+            loop { 
+                cem.next_cell(); 
+                if cem.get_value() == Some(value) { break; }
+            }
+        };
+
+        let mm_const = "|01|02|03|04|05|06|07|08|09|0A|0B|0C|0D|0E|0F|10|11|12|13|14|15|16|17|18|00|...";
+        let om_const = "|T7F0|T7F0|T7F0|F3F0|F0F0|...";
+        let mut cem = CemInner::new(1024, 1024);
+        cem.set_value(0x01);
+        for ind in 2..25 {
+            cem.next_cell();
+            cem.set_value(ind);
+        }
+        assert_eq!(cem.print_om(0), om_const);
+        assert_eq!(cem.print_mm(0), mm_const);
+
+        move_to_start(&mut cem);
+        move_forward(&mut cem, 7);
+        assert_eq!(cem.get_value(), Some(0x08));
+        cem.create_cell();
+        assert_eq!(cem.print_om(0), "|T7F1|F1F0|T7F0|T7F0|F2F0|F0F0|...");
+        assert_eq!(cem.print_mm(0), mm_const);
+        cem.delete_cell();
+        assert_eq!(cem.print_om(0), om_const);
+        assert_eq!(cem.print_mm(0), mm_const);
+
+        move_forward_while(&mut cem, 15);
+        cem.create_cell();
+        assert_eq!(cem.print_om(0), "|T7F1|T7F0|F1F0|T7F0|F2F0|F0F0|...");
+        assert_eq!(cem.print_mm(0), mm_const);
+        cem.delete_cell();
+        assert_eq!(cem.print_om(0), om_const);
+        assert_eq!(cem.print_mm(0), mm_const);
+
+
+        move_forward_while(&mut cem, 20);
+        cem.create_cell();
+        assert_eq!(cem.print_om(0), "|T7F1|T7F0|F6F0|F4F0|F0F0|...");
+        assert_eq!(cem.print_mm(0), mm_const);
+        cem.delete_cell();
+        assert_eq!(cem.print_om(0), om_const);
+        assert_eq!(cem.print_mm(0), mm_const);
+
+        move_forward_while(&mut cem, 21);
+        cem.create_cell();
+        assert_eq!(cem.print_om(0), "|T7F1|T7F0|F7F0|F3F0|F0F0|...");
+        assert_eq!(cem.print_mm(0), mm_const);
+        cem.delete_cell();
+        assert_eq!(cem.print_om(0), om_const);
+        assert_eq!(cem.print_mm(0), mm_const);
+
+        move_forward_while(&mut cem, 22);
+        cem.create_cell();
+        assert_eq!(cem.print_om(0), "|T7F1|T7F0|T7F0|F1F0|F2F0|F0F0|...");
+        assert_eq!(cem.print_mm(0), mm_const);
+        cem.delete_cell();
+        assert_eq!(cem.print_om(0), om_const);
+        assert_eq!(cem.print_mm(0), mm_const);
+
+        assert_eq!(cem.error(), false);
+    }
+    // TODO: glue test
 }
