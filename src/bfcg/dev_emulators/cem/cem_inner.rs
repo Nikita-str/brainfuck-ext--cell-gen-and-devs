@@ -11,6 +11,7 @@
 //               |   main   | additional | order |
 //
 /// this device is sequential access memory device  
+pub(in super)
 struct CemInner{
     /// \[MEM\]
     main_mem: Vec<u8>,
