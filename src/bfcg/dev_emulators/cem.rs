@@ -1,3 +1,7 @@
+// оставь надежду всяк сюда входящий
+// code there is hard for understanding 
+// sorry
+
 
 // MAYBE: we can use (consecutive-xx-amount == 0xF) instead overflow-xx-flag
 
@@ -44,6 +48,8 @@ struct CemInner{
     /// \[POINTER\]
     om_mm_pos: usize, // main_memory pos in om, check {*1} but we need 3 ptr
     /// \[POINTER\]
+    om_am_end_pos: usize, // {*1} (ptr on end used cell) 
+    /// \[POINTER\]
     om_am_pos: usize, // addi_memory pos in om, check {*1} but we need 3 ptr
     /// \[TRIGGER\]
     trig_cur_am: bool, // if 0 => mm else am
@@ -83,13 +89,13 @@ impl CemInner{
     fn om_inc_mm_pos(&mut self) {
         self.trig_cur_am = false;
         self.om_mm_pos += 1;
-        if self.om_mm_pos > self.om_am_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
+        if self.om_mm_pos > self.om_am_end_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
         if self.om_mm_pos > self.om_mm_end_pos { self.om_mm_end_pos = self.om_mm_pos; }
     }
 
     fn om_inc_am_pos(&mut self) {
-        self.om_am_pos += 1;
-        if self.om_am_pos > self.om_mm_end_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
+        self.om_am_end_pos += 1;
+        if self.om_am_end_pos > self.om_mm_end_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
     }
 
     fn om_inc_mm_con(&mut self) {
@@ -106,23 +112,18 @@ impl CemInner{
         self.reg_con_amount = x;
     }
     
-    fn om_inc_am_con(&mut self) {
-        let mut om_x = self.order_mem[self.om_am_pos];
+    fn om_inc_am_con(&mut self) { // JUMP HERE
+        let mut om_x = self.order_mem[self.om_am_end_pos];
         let mut x = (om_x >> AM_AMOUNT_SHIFT) & AMOUNT_MAX;
         let moved = x == AMOUNT_MAX; 
         if moved { 
-            self.order_mem[self.om_am_pos] = om_x | (1 << AM_OF_SHIFT);
+            self.order_mem[self.om_am_end_pos] = om_x | (1 << AM_OF_SHIFT);
             self.om_inc_am_pos();
-            om_x = self.order_mem[self.om_am_pos];
+            om_x = self.order_mem[self.om_am_end_pos];
             x = 0;
         } 
         let x = x + 1;
-        self.order_mem[self.om_am_pos] = (om_x & !AM_AMOUNT_MASK) | (x << AM_AMOUNT_SHIFT);
-
-        // if ptr moved then nove it back
-        // (AM for move ptr forward use next_cell fn)
-        if moved { self.om_am_pos -= 1; } 
-        else { self.reg_con_amount = x; }
+        self.order_mem[self.om_am_end_pos] = (om_x & !AM_AMOUNT_MASK) | (x << AM_AMOUNT_SHIFT);
     }
 
     fn om_mm_transfer(&mut self) {
@@ -153,7 +154,7 @@ impl CemInner{
                 if new_val >= AMOUNT_MAX { panic!("[ALGO ERROR] : transfer + end_amount must be < 2*AMOUNT_MAX") }
                 
                 self.om_mm_end_pos += 1;
-                if self.om_mm_end_pos > self.om_am_pos { 
+                if self.om_mm_end_pos > self.om_am_end_pos { 
                     // init cell, in real dev it already 0x00 
                     self.order_mem.push(Self::create_om_cell(false, new_val, false, 0)); 
                 } else {
@@ -168,10 +169,39 @@ impl CemInner{
             if ((om_x >> MM_OF_SHIFT) & 1) == 1 { panic!("[ALGO ERROR]") }
 
             self.om_mm_end_pos += 1;
-            if self.om_mm_end_pos > self.om_am_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
+            if self.om_mm_end_pos > self.om_am_end_pos { self.order_mem.push(0x00); } // init cell, in real dev it already 0x00 
             let om_x = self.order_mem[self.om_mm_end_pos];
             self.order_mem[self.om_mm_end_pos] = (om_x & !MM_AMOUNT_MASK) | (transfer << MM_AMOUNT_SHIFT);
         }
+    }
+
+    fn om_mm_glue(&mut self) {
+        if self.om_mm_pos == self.om_mm_end_pos { return }
+
+        let two_in_a_row = self.om_mm_pos + 1 == self.om_mm_end_pos;
+
+        let cur_byte = self.order_mem[self.om_mm_pos];
+        let end_byte = self.order_mem[self.om_mm_end_pos];
+
+        let max_move = AMOUNT_MAX - ((cur_byte >> MM_AMOUNT_SHIFT) & AMOUNT_MAX);
+        let end_can_move = (end_byte >> MM_AMOUNT_SHIFT) & AMOUNT_MAX;
+
+        if end_can_move > max_move {
+            self.order_mem[self.om_mm_pos] = cur_byte | (1 << MM_OF_SHIFT) | (AMOUNT_MAX << MM_AMOUNT_SHIFT); 
+            return 
+        }
+        if end_can_move == max_move {
+            self.order_mem[self.om_mm_pos] = cur_byte | (1 << MM_OF_SHIFT) | (AMOUNT_MAX << MM_AMOUNT_SHIFT);  
+            if two_in_a_row { self.order_mem[self.om_mm_pos] &= !(1 << MM_OF_SHIFT); }
+            // TODO
+        }
+
+        if two_in_a_row {
+
+        } else {
+
+        }
+        
     }
 }
 // [-] OM fn
@@ -211,6 +241,7 @@ impl CemInner{
 
             om_mm_end_pos: 0,
             om_mm_pos: 0,
+            om_am_end_pos: 0,
             om_am_pos: 0,
             trig_cur_am: false, // first mem-cell always is mm even in run-time
 
@@ -346,6 +377,7 @@ impl CemInner{
                 else { self.mm_pos += 1; }
             }
             if self.trig_cur_am && self.am_pos == self.am_last_clear_pos { self.trig_am_can_create = true }
+            if self.om_am_end_pos < self.om_am_pos { self.om_am_end_pos = self.om_am_pos; }
         }
     }
 
@@ -438,6 +470,8 @@ impl CemInner{
             self.om_mm_transfer();
             if self.am_pos.is_some() {
                 self.om_am_pos += 1;
+                self.om_am_end_pos += 1;
+                if self.om_am_pos != self.om_am_end_pos { panic!("[ALGO ERROR]") }
                 if self.om_am_pos > self.om_mm_end_pos { self.order_mem.push(0x00); }
                 self.order_mem[self.om_am_pos] = self.order_mem[self.om_am_pos] | (1 << AM_AMOUNT_SHIFT); 
                 self.om_am_pos -= 1;
@@ -452,8 +486,88 @@ impl CemInner{
 
         self.next_cell();
         if start_on_mm { self.am_last_clear_pos = self.am_pos; }
+    }
 
-        // TODO:STOP HERE
+    pub fn delete_cell(&mut self) {
+        if self.error { return }
+        if !self.trig_cur_am { self.error = true; return }
+        if !self.trig_am_can_create { self.error = true; return }
+
+        let am_pos = self.am_pos.unwrap();
+        let last_clear_am_pos = self.am_last_clear_pos.unwrap();
+
+        if last_clear_am_pos > am_pos { panic!("[ALGO ERROR]"); } //trig_cur_am
+        
+        if last_clear_am_pos < am_pos {
+            // we have clear created-cell after cur pos, so just pop it:
+            if self.additional_mem.pop() != Some(0x00) { panic!("[ALGO ERROR]") }
+            
+            self.prev_cell();
+            if !self.trig_cur_am { panic!("[ALGO ERROR]") }
+            
+            let pos = self.om_am_end_pos;
+            let om_x = self.order_mem[pos];
+            if ((om_x >> AM_OF_SHIFT) & 1) == 1 { panic!("[ALGO ERROR]") }
+            let x = (om_x >> AM_AMOUNT_SHIFT) & AMOUNT_MAX;
+            if x == 0 { panic!("[ALGO ERROR]") }
+
+            if x == 1 {
+                self.order_mem[pos] = (om_x & !AM_AMOUNT_MASK) | (0 << AM_AMOUNT_SHIFT);
+                if self.order_mem[pos] == 0x00 { self.order_mem.pop(); }
+                if pos == 0 { panic!("[ALGO ERROR]") }
+                let om_x = self.order_mem[pos - 1];
+                let x = (om_x >> AM_AMOUNT_SHIFT) & AMOUNT_MAX;
+                if x != AMOUNT_MAX { panic!("[ALGO ERROR]") }
+                self.order_mem[pos - 1] = (om_x) & !(1 << AM_OF_SHIFT);
+
+                if self.om_am_pos == self.om_am_end_pos  { self.om_am_pos -= 1; }
+                self.om_am_end_pos -= 1;
+            } else {
+                self.order_mem[pos] = (om_x & !AM_AMOUNT_MASK) | ((x - 1) << AM_AMOUNT_SHIFT);
+            }
+
+            self.am_pos = Some(am_pos - 1);
+        } else {
+            /*
+            self.next_cell();
+            let stay_end = !self.trig_cur_am;
+            self.prev_cell();
+            */
+
+            self.additional_mem[am_pos] = 0x00;
+            self.prev_cell();
+            let stay_first = !self.trig_cur_am;
+
+            let mut need_mm_glue = false;
+
+            let pos = self.om_am_end_pos;
+            let om_x = self.order_mem[pos];
+            let x = (om_x >> AM_AMOUNT_SHIFT) & AMOUNT_MAX;
+            if x == 1 {
+                self.order_mem[pos] = (om_x & !AM_AMOUNT_MASK) | (0 << AM_AMOUNT_SHIFT);
+                if self.order_mem[pos] == 0x00 { self.order_mem.pop(); }
+                if pos != 0 {
+                    let om_x = self.order_mem[pos - 1];
+                    if ((om_x >> AM_OF_SHIFT) & 1) == 1 { self.order_mem[pos - 1] = (om_x) & !(1 << AM_OF_SHIFT); } 
+                    else { need_mm_glue = true; }
+
+                    self.om_am_pos -= 1;
+                    self.om_am_end_pos -= 1;
+                } else {
+                    need_mm_glue = true;
+                }
+            } else {
+                self.order_mem[pos] = (om_x & !AM_AMOUNT_MASK) | ((x - 1) << AM_AMOUNT_SHIFT);
+            }
+
+            if need_mm_glue { } //TODO: glue!
+
+            self.additional_mem.pop();
+            if stay_first && !need_mm_glue { self.next_cell(); }
+
+            self.am_pos = if am_pos == 0 { None } else { Some(am_pos - 1) };
+            self.am_last_clear_pos = self.am_pos;
+        }
     }
 }
 
@@ -471,7 +585,7 @@ impl CemInner {
                 if (x >> AM_OF_SHIFT) & 1 == 1 { 'T' } else {'F'},
                 (x >> AM_AMOUNT_SHIFT) & AMOUNT_MAX, 
             );
-            if (new_line_each > 0) && ind != 0 && (ind % new_line_each == 0) { ret += "\n"; } 
+            if (new_line_each > 0) && ind != 0 && (ind % new_line_each == 0) { ret += "\n|"; } 
         }
         ret += "F0F0|...";
         ret
@@ -482,7 +596,7 @@ impl CemInner {
         ret.push('|');
         for (ind, x) in (&self.main_mem).into_iter().enumerate() {
             ret += &format!("{:02X}|", x);
-            if (new_line_each > 0) && ind != 0 && (ind % new_line_each == 0) { ret += "\n"; } 
+            if (new_line_each > 0) && ind != 0 && (ind % new_line_each == 0) { ret += "\n|"; } 
         }
         ret += "00|...";
         ret
@@ -493,7 +607,7 @@ impl CemInner {
         ret.push('|');
         for (ind, x) in (&self.additional_mem).into_iter().enumerate() {
             ret += &format!("{:02X}|", x);
-            if (new_line_each > 0) && ind != 0 && (ind % new_line_each == 0) { ret += "\n"; } 
+            if (new_line_each > 0) && ind != 0 && (ind % new_line_each == 0) { ret += "\n|"; } 
         }
         ret += "00|...";
         ret
@@ -518,17 +632,17 @@ pub mod tests {
     use super::*;
 
     pub(in super) fn full_print(cem: &CemInner) {
-        println!("++- --- --- --- -++");  
+        println!("+++ ↓↓↓ ↓↓↓ ↓↓↓ +++");  
         println!("{} ERROR", if cem.error() { "!!!" } else { "NO" });
         println!("reg con amount = {}", cem.reg_con_amount);
         println!("STAY ON [{}]", if cem.trig_cur_am { "AM" } else { "MM" });
         println!("CAN CREATE = {}", cem.trig_am_can_create);
         println!("PTR[AM]: cur_ptr = {:?}; last_clear_ptr = {:?};", cem.am_pos, cem.am_last_clear_pos);
-        println!("PTR[OM]: am = {}; mm = {}; mm_end = {};", cem.om_am_pos, cem.om_mm_pos, cem.om_mm_end_pos);
+        println!("PTR[OM]: am = {}; am_end = {}; mm = {}; mm_end = {};", cem.om_am_pos, cem.om_am_end_pos, cem.om_mm_pos, cem.om_mm_end_pos);
         println!("OM: {}", cem.print_om(0));
         println!("MM: {}", cem.print_mm(0));
         println!("AM: {}", cem.print_am(0));  
-        println!("--- --- --- --- ---");  
+        println!("--- ↑↑↑ ↑↑↑ ↑↑↑ ---");  
     }
 
     #[test]
@@ -854,6 +968,26 @@ pub mod tests {
         assert_eq!(&cem.print_om(0), "|F1T7|F1T7|F1F1|F0T7|F0T7|F0F1|F0F0|...");
         assert_eq!(&cem.print_mm(0), "|FF|FF|FF|00|...");
         assert_eq!(&cem.print_am(0), "|A0|A1|A2|A3|A4|A5|A6|A7|A8|A9|AA|AB|AC|AD|AE|B0|B1|B2|B3|B4|B5|B6|B7|B8|B9|BA|BB|BC|BD|BE|00|...");
+        full_print(&cem);
+    }
+
+    #[test]
+    fn test_cem_05(){
+        let mut cem = CemInner::new(1024, 1024);
+        cem.create_cell();
+        for ind in 2..25 {
+            cem.create_cell();
+            cem.prev_cell();
+            assert_eq!(cem.stay_on_the_end(), false);
+            assert_eq!(cem.om_am_pos, 0);
+            assert_eq!(cem.om_am_end_pos, ((ind - 1) / AMOUNT_MAX) as usize);
+            assert_eq!(cem.om_mm_pos, 0);
+            assert_eq!(cem.om_mm_end_pos, 0);
+            if ind <= AMOUNT_MAX { assert_eq!(cem.print_om(0), format!("|F1F{}|F0F0|...", ind)); } 
+            else if ind <= AMOUNT_MAX * 2 { assert_eq!(cem.print_om(0), format!("|F1T7|F0F{}|F0F0|...", ind - AMOUNT_MAX)); } 
+            else if ind <= AMOUNT_MAX * 3 { assert_eq!(cem.print_om(0), format!("|F1T7|F0T7|F0F{}|F0F0|...", ind - AMOUNT_MAX * 2)); } 
+            else if ind <= AMOUNT_MAX * 4 { assert_eq!(cem.print_om(0), format!("|F1T7|F0T7|F0T7|F0F{}|F0F0|...", ind - AMOUNT_MAX * 3)); } 
+        }
         full_print(&cem);
     }
 }
