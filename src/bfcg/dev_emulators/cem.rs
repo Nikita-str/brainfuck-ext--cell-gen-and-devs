@@ -182,26 +182,45 @@ impl CemInner{
 
         let cur_byte = self.order_mem[self.om_mm_pos];
         let end_byte = self.order_mem[self.om_mm_end_pos];
+        
+        if (cur_byte >> MM_OF_SHIFT) & 1 == 1 { panic!("[ALGO ERROR]") }
 
         let max_move = AMOUNT_MAX - ((cur_byte >> MM_AMOUNT_SHIFT) & AMOUNT_MAX);
         let end_can_move = (end_byte >> MM_AMOUNT_SHIFT) & AMOUNT_MAX;
 
         if end_can_move > max_move {
             self.order_mem[self.om_mm_pos] = cur_byte | (1 << MM_OF_SHIFT) | (AMOUNT_MAX << MM_AMOUNT_SHIFT); 
+            self.order_mem[self.om_mm_end_pos] = (end_byte & !MM_AMOUNT_MASK) | ((end_can_move - max_move) << MM_AMOUNT_SHIFT);
             return 
         }
         if end_can_move == max_move {
             self.order_mem[self.om_mm_pos] = cur_byte | (1 << MM_OF_SHIFT) | (AMOUNT_MAX << MM_AMOUNT_SHIFT);  
             if two_in_a_row { self.order_mem[self.om_mm_pos] &= !(1 << MM_OF_SHIFT); }
-            // TODO
+            self.order_mem[self.om_mm_end_pos] &= !MM_AMOUNT_MASK;
+            if self.order_mem[self.om_mm_end_pos] == 0x00 { self.order_mem.pop(); }
+            self.om_mm_end_pos -= 1;
+            self.order_mem[self.om_mm_end_pos] &= !(1 << MM_OF_SHIFT);
+            return
         }
 
+        // end_can_move < max_move
         if two_in_a_row {
-
+            let delta = max_move - end_can_move;
+            self.order_mem[self.om_mm_pos] = (cur_byte & !MM_AMOUNT_MASK) | ((AMOUNT_MAX - delta) << MM_AMOUNT_SHIFT); 
+            self.order_mem[self.om_mm_end_pos] &= !MM_AMOUNT_MASK;
+            if self.order_mem[self.om_mm_end_pos] == 0x00 { self.order_mem.pop(); }
+            self.om_mm_end_pos -= 1;
         } else {
-
+            let delta = max_move - end_can_move;
+            self.order_mem[self.om_mm_pos] = (cur_byte & !MM_AMOUNT_MASK) | (AMOUNT_MAX << MM_AMOUNT_SHIFT) | (1 << MM_OF_SHIFT); 
+            self.order_mem[self.om_mm_end_pos] &= !MM_AMOUNT_MASK;
+            if self.order_mem[self.om_mm_end_pos] == 0x00 { self.order_mem.pop(); }
+            self.om_mm_end_pos -= 1;
+            self.order_mem[self.om_mm_end_pos] &= !(1 << MM_OF_SHIFT);
+            if (self.order_mem[self.om_mm_end_pos] >> MM_AMOUNT_SHIFT) != 0x0F { panic!("[ALGO ERROR]") } 
+            self.order_mem[self.om_mm_end_pos] &= !MM_AMOUNT_MASK;
+            self.order_mem[self.om_mm_end_pos] |=  (AMOUNT_MAX - delta) << MM_AMOUNT_SHIFT;
         }
-        
     }
 }
 // [-] OM fn
@@ -551,8 +570,8 @@ impl CemInner{
                     if ((om_x >> AM_OF_SHIFT) & 1) == 1 { self.order_mem[pos - 1] = (om_x) & !(1 << AM_OF_SHIFT); } 
                     else { need_mm_glue = true; }
 
-                    self.om_am_pos -= 1;
                     self.om_am_end_pos -= 1;
+                    if self.om_am_pos > self.om_am_end_pos { self.om_am_pos -= 1; }
                 } else {
                     need_mm_glue = true;
                 }
@@ -560,13 +579,14 @@ impl CemInner{
                 self.order_mem[pos] = (om_x & !AM_AMOUNT_MASK) | ((x - 1) << AM_AMOUNT_SHIFT);
             }
 
-            if need_mm_glue { } //TODO: glue!
+            if need_mm_glue { self.om_mm_glue(); } 
 
             self.additional_mem.pop();
             if stay_first && !need_mm_glue { self.next_cell(); }
 
             self.am_pos = if am_pos == 0 { None } else { Some(am_pos - 1) };
             self.am_last_clear_pos = self.am_pos;
+            self.trig_am_can_create = true;
         }
     }
 }
@@ -989,5 +1009,94 @@ pub mod tests {
             else if ind <= AMOUNT_MAX * 4 { assert_eq!(cem.print_om(0), format!("|F1T7|F0T7|F0T7|F0F{}|F0F0|...", ind - AMOUNT_MAX * 3)); } 
         }
         full_print(&cem);
+    }
+
+    fn test_cem_06_helper(version: usize) {
+        let mut cem = CemInner::new(1024, 1024);
+        cem.set_value(0x01);
+        cem.next_cell();
+        cem.set_value(0x02);
+        cem.next_cell();
+        cem.set_value(0x04);
+        cem.next_cell();
+        cem.set_value(0x08);
+        loop { 
+            cem.prev_cell();
+            if let Some(0x01) = cem.get_value() { break; }
+        }
+
+        cem.create_cell();
+        cem.set_value(0xAC);
+        cem.create_cell();
+        cem.set_value(0xAB);
+
+        cem.next_cell();
+        cem.next_cell();
+
+        cem.create_cell();
+        cem.set_value(0x1C);
+
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0x04));
+        cem.next_cell();
+        assert_eq!(cem.get_value(), Some(0x08));
+        cem.prev_cell();
+
+        cem.create_cell();
+        cem.create_cell();
+        cem.prev_cell();
+        cem.create_cell();
+        cem.set_value(0x1C);
+        cem.prev_cell();
+        cem.set_value(0xC1);
+        assert_eq!(&cem.print_om(0), "|F1F2|F2F3|F1F0|F0F0|...");
+        assert_eq!(cem.error(), false);
+        // LOL we really cant! it's first catched by cem error! : cem.delete_cell();
+        if version == 1 {
+            cem.delete_cell();
+            assert_eq!(cem.error(), true);
+            return
+        }
+        cem.next_cell();
+        assert_eq!(cem.get_value(), Some(0x1C));
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0xC1));
+        cem.create_cell();
+
+        cem.next_cell();
+        cem.create_cell();
+        cem.delete_cell();
+
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0x00));
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0xC1));
+        assert_eq!(&cem.print_om(0), "|F1F2|F2F1|F1F0|F0F0|...");
+        cem.delete_cell();
+        assert_eq!(&cem.print_om(0), "|F1F2|F3F0|F0F0|...");
+        assert_eq!(cem.get_value(), Some(0x04));
+        cem.next_cell();
+        assert_eq!(cem.get_value(), Some(0x08));
+        cem.prev_cell();
+
+        cem.prev_cell();
+        cem.prev_cell();
+
+        assert_eq!(cem.get_value(), Some(0xAB));
+        cem.delete_cell();
+        assert_eq!(cem.get_value(), Some(0xAC));
+        assert_eq!(&cem.print_om(0), "|F1F1|F3F0|F0F0|...");
+        cem.delete_cell();
+        assert_eq!(&cem.print_om(0), "|F4F0|F0F0|...");
+        assert_eq!(cem.get_value(), Some(0x01));
+
+        assert_eq!(cem.error(), false);
+        full_print(&cem);
+    }
+
+    #[test]    
+    fn test_cem_06() {
+        test_cem_06_helper(1);
+        test_cem_06_helper(0);
     }
 }
