@@ -40,6 +40,17 @@ impl ComInner{
         }
     }
 
+    pub fn set_mem(&mut self, mem: Vec<u8>) {
+        if self.error { return }
+        if mem.len() >= self.mem_size { self.error = true; return }
+        self.mem = mem;
+    }
+
+    pub fn move_to_start(&mut self) {
+        if self.error { return }
+        self.cur_pos = 0;
+    }
+
     pub fn move_backward(&mut self) {
         if self.error { return }
         if self.cur_pos == 0 {  self.error = true; return }
