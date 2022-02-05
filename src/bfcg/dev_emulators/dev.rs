@@ -20,3 +20,21 @@ pub trait Dev{
     /// ```
     fn in_infinity_state(&self) -> bool;
 }
+
+#[macro_export]
+macro_rules! dev_std_precheck_read_byte {
+    ($dev:ident, $default:ident) => {
+        if $dev.in_infinity_state() { return $default }
+        if $dev.have_error() {  $dev.infinity = true; return $default }
+        if !$dev.test_can_read_byte() { $dev.error = true; return $default }
+    };
+}
+
+
+#[macro_export]
+macro_rules! dev_std_precheck_write_byte {
+    ($dev:ident) => {
+        // Dev not blocked on write in any case 
+        if $dev.in_infinity_state() || $dev.have_error() { return }
+    }
+}

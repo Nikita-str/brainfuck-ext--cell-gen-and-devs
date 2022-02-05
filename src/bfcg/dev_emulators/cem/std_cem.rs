@@ -1,6 +1,6 @@
 use std::u8;
 
-use crate::bfcg::dev_emulators::{dev::Dev, dev_utilities::mem_dev::CellMemDevStartAction};
+use crate::{bfcg::dev_emulators::{dev::Dev, dev_utilities::mem_dev::CellMemDevStartAction}, dev_std_precheck_read_byte, dev_std_precheck_write_byte};
 
 use super::cem_inner::{CemInner};
 
@@ -55,14 +55,12 @@ impl DevStdCem {
 // [-] COND HELPER
 // -----------------------------------------------
 
-const DEFAULT:u8 = 0xFF;
+const DEFAULT:u8 = 0x00;
 const ALGO_ERROR:&'static str = "[ALGO ERROR]";
 
 impl Dev for DevStdCem {
     fn read_byte(&mut self) -> u8 {
-        if self.in_infinity_state() { return DEFAULT }
-        if self.have_error() { self.infinity = true; return DEFAULT }
-        if !self.test_can_read_byte() { self.error = true; return DEFAULT }
+        dev_std_precheck_read_byte!(self, DEFAULT);
 
         let value = self.cem_inner.get_value();
 
@@ -74,8 +72,7 @@ impl Dev for DevStdCem {
     }
 
     fn write_byte(&mut self, byte: u8) { 
-        // Dev not blocked on write in any case 
-        if self.in_infinity_state() || self.have_error() { return }
+        dev_std_precheck_write_byte!(self);
 
         match byte {
             // GET:
