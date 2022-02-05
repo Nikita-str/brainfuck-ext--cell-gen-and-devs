@@ -38,3 +38,13 @@ macro_rules! dev_std_precheck_write_byte {
         if $dev.in_infinity_state() || $dev.have_error() { return }
     }
 }
+
+#[macro_export]
+macro_rules! dev_std_realise_in_inf {
+    () => { fn in_infinity_state(&self) -> bool { self.infinity } };
+}
+
+#[macro_export]
+macro_rules! dev_std_realise_have_error {
+    () => { fn have_error(&self) -> bool { self.error | self.inner.error() } };
+}

@@ -1,7 +1,9 @@
 use std::collections::LinkedList;
 
-use crate::{bfcg::dev_emulators::dev::Dev, dev_std_precheck_read_byte, dev_std_precheck_write_byte};
-
+use crate::{bfcg::dev_emulators::dev::Dev, 
+    dev_std_precheck_write_byte, dev_std_precheck_read_byte, 
+    dev_std_realise_in_inf, dev_std_realise_have_error
+};
 use super::console_inner::ConsoleInner;
 
 pub struct DevConsoleUtf8 {
@@ -83,7 +85,6 @@ impl Dev for DevConsoleUtf8 {
         return true
     }
 
-    fn have_error(&self) -> bool { self.error | self.inner.error() }
-
-    fn in_infinity_state(&self) -> bool { self.infinity }
+    dev_std_realise_in_inf!();
+    dev_std_realise_have_error!();
 }
