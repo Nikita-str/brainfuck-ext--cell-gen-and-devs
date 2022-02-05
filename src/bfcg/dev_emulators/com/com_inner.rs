@@ -52,6 +52,7 @@ impl ComInner{
         self.cur_pos = 0;
     }
 
+    #[allow(unused)]
     pub fn move_backward(&mut self) {
         if self.error { return }
         if self.cur_pos == 0 {  self.error = true; return }

@@ -93,7 +93,7 @@ fn compiler_test_u8_std_cmd_01() {
     disasm_info.std_init();
     let disasm = std_disasm(code.into_iter(), &disasm_info); 
     if let Ok(x) = disasm { 
-        // let mut file = std::fs::File::create("examples/compile_test/must_success/disasm_by_compiler_test_u8_std_cmd_01.disasm").ok().unwrap();
+        //let mut file = std::fs::File::create("examples/compile_test/must_success/disasm_by_compiler_test_u8_std_cmd_01.disasm").ok().unwrap();
         let mut file = std::fs::File::create("target/tmp/u8_std_cmd_01.disasm").ok().unwrap();
         if file.write(x.as_bytes()).is_err() { panic!("cant write in file") };
     } else if let Err(err) = disasm {

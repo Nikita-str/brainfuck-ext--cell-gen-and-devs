@@ -129,19 +129,32 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
             0x05 => ret.push_str("WR\n"),
             
             0x06 => {
-                ret.push_str("CWR[");
+                ret.push_str("SRC[");
                 let cmd = iter.next();
-                let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on CWR")) };
+                let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on SRC")) };
                 if let Some(x) = cur_dev {
                     if let Some(act) = dev_action.get(&(x, cmd as usize)) {
                         ret.push_str(act); 
                         ret.push(']'); 
                         
                         if x == StdDevName::CmdMem {
-                            let cmd = iter.next();
-                            let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on JMP")) };
-                            if cmd != 0x05 {return Err(format!("after JMP stay not WR")) }
-                            ret.push_str(" WR ");
+                            // hehe, previously we do: 
+                            // CW[CMD]  // write in port byte = CMD
+                            // WR       // write cur value
+                            // SE       // jmp SE seq
+                            //
+                            // now we do:
+                            // SRW[CMD] // set reg value in CMD
+                            // WR       // write seted value
+                            // WR       // write cur value
+                            // SE       // jmp SE seq
+
+                            for _ in 0..2 {
+                                let cmd = iter.next();
+                                let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on JMP")) };
+                                if cmd != 0x05 {return Err(format!("after JMP stay not WR")) }
+                                ret.push_str(" WR ");
+                            }
 
                             let mut se = vec![];
                             loop {

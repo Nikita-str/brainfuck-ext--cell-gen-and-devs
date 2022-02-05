@@ -30,7 +30,7 @@ pub enum StdCmdNames{
     Set, // 0x03 + CEM: SE
     Read, // 0x04
     Write, // 0x05
-    ConstWrite(u8), // 0x06
+    SetRegConst(u8), // 0x06   // MAYBE: SetRegConst[x]; => CW[x] = SRC[x] + WR
 }
 
 impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
@@ -42,7 +42,7 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
             Self::Set => one_ll(0x03).into_iter(),
             Self::Read => one_ll(0x04).into_iter(),
             Self::Write => one_ll(0x05).into_iter(),
-            Self::ConstWrite(byte) => add_front_ll(one_ll(*byte), 0x06).into_iter(),
+            Self::SetRegConst(byte) => add_front_ll(one_ll(*byte), 0x06).into_iter(),
         }
     }
 }
@@ -58,7 +58,6 @@ pub enum RegCmdNames{
     RightShift = 0x0B,
     And = 0x0C,
     Bnd = 0x0D,
-    Zero = 0x0E,
 }
 
 impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for RegCmdNames {
@@ -74,7 +73,6 @@ impl RegCmdNames{
             ValidCMD::RightShift => Some(Self::RightShift),
             ValidCMD::And => Some(Self::And),
             ValidCMD::Bnd => Some(Self::Bnd),
-            ValidCMD::ZeroedCell => Some(Self::Zero),
             ValidCMD::TestZeroCell => Some(Self::TestZero),
             _ => None,
         }
@@ -83,8 +81,8 @@ impl RegCmdNames{
 
 /// PR is PORT REG
 const USER_PR: usize = 0;
-const MEM_CELL_PR: usize = USER_PR + 1;
-const MEM_CMD_PR: usize = MEM_CELL_PR + 1;
+pub const MEM_CELL_PR: usize = USER_PR + 1;
+pub const MEM_CMD_PR: usize = MEM_CELL_PR + 1;
 const CONSOLE_PR: usize = MEM_CMD_PR + 1;
 const WIN_PR: usize = CONSOLE_PR + 1;
 pub(in super) const MAX_PR: usize = WIN_PR + 1;
@@ -344,6 +342,13 @@ impl StdCmdCompiler{
 // ------------------------------------------
 // + [COMPILE TO BYTE] 
 impl StdCmdCompiler{
+
+    #[inline]
+    fn ctb_const_write(&mut self, x: u8) {
+        self.ctb_to(StdCmdNames::SetRegConst(x));
+        self.ctb_to(StdCmdNames::Write);
+    }
+
     #[inline]
     fn ctb_to<Iter>(&mut self, to_u8_seq: impl ToU8Seq<Iter>) 
     where Iter: Iterator<Item = u8>
@@ -363,7 +368,7 @@ impl StdCmdCompiler{
     fn ctb_load_cur_cem(&mut self) {
         if self.get_cem_cur_cell_in_reg() { return }
         self.ctb_set_cur_pr(MEM_CELL_PR);
-        self.ctb_to(StdCmdNames::ConstWrite(CellMemDevStartAction::GetCellValue as u8)); 
+        self.ctb_const_write(CellMemDevStartAction::GetCellValue as u8);
         self.ctb_to(StdCmdNames::Read);
         self.set_cem_cur_cell_in_reg(true);
     }
@@ -372,7 +377,7 @@ impl StdCmdCompiler{
     fn ctb_unload_cur_cem(&mut self) {
         if !self.get_cem_cur_cell_in_reg() { return }
         self.ctb_set_cur_pr(MEM_CELL_PR);
-        self.ctb_to(StdCmdNames::ConstWrite(CellMemDevStartAction::SetCellValue as u8)); 
+        self.ctb_const_write(CellMemDevStartAction::SetCellValue as u8); 
         self.ctb_to(StdCmdNames::Write);
     }
 
@@ -380,11 +385,8 @@ impl StdCmdCompiler{
 // - [COMPILE TO BYTE] 
 // ------------------------------------------
 
-impl CmdCompiler<u8> for StdCmdCompiler{
-    fn cmd_compile(&mut self, cmd: char, pos: CompilerPos) -> Option<CompilerErrorType> {
-        let valid_cmd = ValidCMD::std_parse_char(cmd);
-        if valid_cmd.is_none() { return Some(CompilerErrorType::UnknownCmd(cmd)) }
-        let valid_cmd = valid_cmd.unwrap();
+impl StdCmdCompiler {
+    fn cmd_compile_inner(&mut self, valid_cmd: ValidCMD, pos: CompilerPos) -> Option<CompilerErrorType> {
 
         if let Some(reg_cmd) = RegCmdNames::try_from_valid_cmd(valid_cmd.clone()) {
             self.ctb_load_cur_cem();
@@ -392,7 +394,6 @@ impl CmdCompiler<u8> for StdCmdCompiler{
             return None
         }
 
-        
         // {*1}: we can not unload value cause it will rewrite by this op
         // {*2}: cur value must be in reg
         
@@ -401,10 +402,10 @@ impl CmdCompiler<u8> for StdCmdCompiler{
                 self.ctb_unload_cur_cem();
                 
                 self.ctb_set_cur_pr(MEM_CELL_PR);
-                self.ctb_to(StdCmdNames::ConstWrite(CellMemDevStartAction::from_valid_cmd(&valid_cmd) as u8));
+                self.ctb_const_write(CellMemDevStartAction::from_valid_cmd(&valid_cmd) as u8);
 
                 if let ValidCMD::CreateCell = valid_cmd {
-                    self.ctb_to(RegCmdNames::Zero);
+                    self.ctb_to(StdCmdNames::SetRegConst(0x00));
                     self.set_cem_cur_cell_in_reg(true);
                 } else {
                     self.set_cem_cur_cell_in_reg(false);
@@ -412,12 +413,12 @@ impl CmdCompiler<u8> for StdCmdCompiler{
             }
             ValidCMD::DecCoordX | ValidCMD::DecCoordY | ValidCMD::IncCoordX | ValidCMD::IncCoordY | ValidCMD::RedrawWin => {
                 self.ctb_set_cur_pr(WIN_PR);
-                self.ctb_to(StdCmdNames::ConstWrite(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8));
+                self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
             }
             ValidCMD::SetWinValue => {
                 self.ctb_load_cur_cem(); // {*2}
                 self.ctb_set_cur_pr(WIN_PR);
-                self.ctb_to(StdCmdNames::ConstWrite(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8));
+                self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
                 self.ctb_to(StdCmdNames::Write);
             }
             // #############################################################
@@ -461,7 +462,7 @@ impl CmdCompiler<u8> for StdCmdCompiler{
                 self.ctb_load_cur_cem(); // cause we need it's value in reg
 
                 self.ctb_set_cur_pr(MEM_CMD_PR);
-                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevStartAction::JumpForward as u8));
+                self.ctb_const_write(CmdMemDevStartAction::JumpForward as u8);
                 self.ctb_to(StdCmdNames::Write); // value for jump test (if 0 => jump)
                 
                 let cmd_pos = self.program.len();
@@ -477,7 +478,7 @@ impl CmdCompiler<u8> for StdCmdCompiler{
                 self.ctb_load_cur_cem(); // cause we need it's value in reg
 
                 self.ctb_set_cur_pr(MEM_CMD_PR);
-                self.ctb_to(StdCmdNames::ConstWrite(CmdMemDevStartAction::JumpBackward as u8));
+                self.ctb_const_write(CmdMemDevStartAction::JumpBackward as u8);
                 self.ctb_to(StdCmdNames::Write); // value for jump test (if !0 => jump)
 
                 let cmd_pos = self.program.len();
@@ -498,7 +499,18 @@ impl CmdCompiler<u8> for StdCmdCompiler{
                 }
             }
             // #############################################################
-            _ => panic!("unaccounted cmd {}", cmd),
+            ValidCMD::Clone => {
+                self.ctb_unload_cur_cem();
+                self.ctb_load_cur_cem(); // {*2}
+                let res = self.cmd_compile_inner(ValidCMD::NextCell, pos);
+                if res.is_some() { return res }
+            }
+            ValidCMD::ZeroedCell => {
+                self.ctb_load_cur_cem();
+                self.ctb_to(StdCmdNames::SetRegConst(0x00));
+            }
+            // #############################################################
+            _ => panic!("unaccounted cmd {}", valid_cmd.std_to_char()),
         }   
              
         // SOLVED : in get_program() ... self.ctb_unload_cur_cem();
@@ -509,6 +521,16 @@ impl CmdCompiler<u8> for StdCmdCompiler{
         //       we can do this by adding '> <' in the end of code
 
         None
+    }
+}
+    
+impl CmdCompiler<u8> for StdCmdCompiler{
+    fn cmd_compile(&mut self, cmd: char, pos: CompilerPos) -> Option<CompilerErrorType> {
+        let valid_cmd = ValidCMD::std_parse_char(cmd);
+        if valid_cmd.is_none() { return Some(CompilerErrorType::UnknownCmd(cmd)) }
+        let valid_cmd = valid_cmd.unwrap();
+        
+        self.cmd_compile_inner(valid_cmd, pos)
     }
 
     fn get_program(mut self) -> Result<Vec<u8>, CompilerErrorType> {

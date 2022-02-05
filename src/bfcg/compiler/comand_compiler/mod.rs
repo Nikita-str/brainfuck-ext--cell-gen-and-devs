@@ -15,3 +15,7 @@ pub use std_cc::StdCmdNames; // MAYBE:TODO: move out to other place?
 pub use std_cc::StdCmdCompiler;
 
 pub use port_name_handler::PortNameHandler;
+
+pub use std_cc::MIN_PORT_AMOUNT;
+pub use std_cc::MEM_CELL_PR;
+pub use std_cc::MEM_CMD_PR;

@@ -126,7 +126,7 @@ impl Dev for DevCom {
                     if byte == 0 { self.inner.jump_forward(jmp_len_forward) }
                 }
                 CmdMemDevStartAction::JumpBackward => {
-                    if byte != 0 { self.inner.jump_forward(jmp_len_backward) }
+                    if byte != 0 { self.inner.jump_backward(jmp_len_backward) }
                 }
             }
 
