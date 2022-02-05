@@ -30,7 +30,23 @@ pub enum StdCmdNames{
     Set, // 0x03 + CEM: SE
     Read, // 0x04
     Write, // 0x05
-    SetRegConst(u8), // 0x06   // MAYBE: SetRegConst[x]; => CW[x] = SRC[x] + WR
+    SetRegConst(u8), // 0x06
+}
+
+impl StdCmdNames {
+    /// use carefully! valid only name of instruction, not inner value
+    pub fn is_start_byte(byte: u8) -> Option<Self> {
+        match byte {
+            0x00 => Some(Self::Pass), 
+            0x01 => Some(Self::Test), 
+            0x02 => Some(Self::Cur(0xBAD_C0DE)), 
+            0x03 => Some(Self::Set), 
+            0x04 => Some(Self::Read), 
+            0x05 => Some(Self::Write), 
+            0x06 => Some(Self::SetRegConst(0xBA)),
+            _ => None 
+        }
+    }
 }
 
 impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
@@ -58,6 +74,21 @@ pub enum RegCmdNames{
     RightShift = 0x0B,
     And = 0x0C,
     Bnd = 0x0D,
+}
+
+impl RegCmdNames {
+    pub fn try_from_byte(byte: u8) -> Option<Self> { // need macros, but .. not now
+        match byte {
+            x if x == Self::TestZero as u8 => { Some(Self::TestZero) }
+            x if x == Self::Inc as u8 => { Some(Self::Inc) }
+            x if x == Self::Dec as u8 => { Some(Self::Dec) }
+            x if x == Self::LeftShift as u8 => { Some(Self::LeftShift) }
+            x if x == Self::RightShift as u8 => { Some(Self::RightShift) }
+            x if x == Self::And as u8 => { Some(Self::And) }
+            x if x == Self::Bnd as u8 => { Some(Self::Bnd) }
+            _ => None
+        }
+    }
 }
 
 impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for RegCmdNames {

@@ -12,6 +12,7 @@ pub use program_concat::ProgramConcat;
 pub use interpreter_cc::InterpreterCmdCompiler;
 
 pub use std_cc::StdCmdNames; // MAYBE:TODO: move out to other place? 
+pub use std_cc::RegCmdNames;  
 pub use std_cc::StdCmdCompiler;
 
 pub use port_name_handler::PortNameHandler;
