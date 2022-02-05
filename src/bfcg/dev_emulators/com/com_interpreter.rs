@@ -73,6 +73,17 @@ impl ComInterpreter {
         self.cur_pos = Some(pos);
     }
 
+    pub fn com_ended(&mut self) -> bool {
+        if self.error() { return false }
+        if self.await_jmp_byte.is_some() { return false }
+        
+        if let Some(x) = self.cur_pos {
+            self.mem.len() == x + 1
+        } else { 
+            self.mem.len() == 0
+        }
+    }
+
     /// do COM operation if need + get cur cmd
     pub fn com_get_cmd(&mut self) -> Option<ValidCMD> {
         if self.await_jmp_byte.is_some() { self.error = true; return None }

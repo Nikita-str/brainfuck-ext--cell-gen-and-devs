@@ -27,7 +27,22 @@ impl CellMemDevStartAction{
 
 
 #[repr(u8)]
+#[derive(Clone)]
 pub enum CmdMemDevStartAction {
     JumpBackward = 0x01, 
     JumpForward = 0x02,
+}
+
+impl CmdMemDevStartAction {
+    pub fn try_from_byte(byte: u8) -> Option<Self> {
+        match byte {
+            x if x == CmdMemDevStartAction::JumpForward as u8 => {
+                Some(CmdMemDevStartAction::JumpForward)
+            }
+            x if x == CmdMemDevStartAction::JumpBackward as u8 => {
+                Some(CmdMemDevStartAction::JumpBackward)
+            }
+            _ => { None }
+        }
+    }
 }

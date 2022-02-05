@@ -19,13 +19,14 @@ pub fn std_se_encoding(mut to_se: usize) -> LinkedList<u8>{
     ret
 }
 
-pub fn std_se_decoding<Iter: Iterator<Item = u8>>(iter: Iter) -> Option<usize> {
+pub fn std_se_decoding<'a, Iter: Iterator<Item = &'a u8>>(iter: Iter) -> Option<usize> {
     let mut ret = 0;
     let mut cur_sh = 0;
 
     let mut started = false;
     let mut previous_is_last = false; 
-    for mut x in iter {
+    for z in iter {
+        let mut x = *z;
         started = true;
         if previous_is_last && x != 0x00 { return None }
         if x < MIN_BIG_BYTE { previous_is_last = true; } 

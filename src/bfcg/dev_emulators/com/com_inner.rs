@@ -23,6 +23,7 @@ impl ComInner{
     pub fn error(&self) -> bool { self.error }
 
     pub fn get_cur_cell(&mut self) -> Option<u8> { 
+        if self.cur_pos == self.mem_size { self.error = true; }
         if self.error { return None }
         Some(self.mem[self.cur_pos]) 
     }
@@ -58,10 +59,15 @@ impl ComInner{
     }
 
     pub fn move_forward(&mut self) {
+        if self.cur_pos == self.mem_size { self.error = true; }
         if self.error { return }
         self.cur_pos += 1;
-        if self.cur_pos == self.mem_size { self.error = true; return }
         if self.mem.len() == self.cur_pos { self.mem.push(0x00); }
+    }
+
+    pub fn stay_on_end(&self) -> bool {
+        if self.error { return false }
+        return self.cur_pos == self.mem_size
     }
 
     /// ~ move forward jmp_len times 

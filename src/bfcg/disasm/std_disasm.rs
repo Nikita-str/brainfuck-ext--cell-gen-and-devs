@@ -112,7 +112,7 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
                     se.push(cmd);
                     if cmd < MIN_BIG_BYTE { break; }
                 }
-                let port_reg = std_se_decoding(se.into_iter());  
+                let port_reg = std_se_decoding(se.iter());  
                 let port_reg = if let Some(port_reg) = port_reg { port_reg } else { return Err(format!("bad se seq in CUR")) };
                 if let Some(dev_const) = pr_index_to_name.get(&port_reg) {  
                     ret.push_str(dev_const);
@@ -150,7 +150,7 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
                                 se.push(cmd);
                                 if cmd < MIN_BIG_BYTE { break; }
                             }
-                            let shift = std_se_decoding(se.into_iter());  
+                            let shift = std_se_decoding(se.iter());  
                             let shift = if let Some(shift) = shift { shift } else { return Err(format!("bad se seq in JMP SE")) };
                             ret.push_str(&format!("[{}]", shift));
                         }
