@@ -19,6 +19,10 @@ impl DevName{
     pub fn add_param(&mut self, param_name: String, param_value: String) -> Option<String>{
         self.params.insert(param_name, param_value)
     }
+
+    pub fn get_name(&self) -> &str { &self.name }
+    pub fn get_param(&self, param_name: &str) -> Option<&String> { self.params.get(param_name) }
+    pub fn get_params(&self) -> &HashMap<String, String> { &self.params }
 }
 
 impl ToString for DevName {

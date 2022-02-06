@@ -1,6 +1,6 @@
 use crate::{bfcg::dev_emulators::dev::Dev, 
     dev_std_precheck_write_byte, dev_std_precheck_read_byte, 
-    dev_std_realise_in_inf, dev_std_realise_have_error
+    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_no_param_impl
 };
 use super::console_inner::ConsoleInner;
 
@@ -52,3 +52,6 @@ impl Dev for DevConsoleAscii {
     dev_std_realise_in_inf!();
     dev_std_realise_have_error!();
 }
+
+
+dev_ctor_no_param_impl!(DevConsoleAscii);

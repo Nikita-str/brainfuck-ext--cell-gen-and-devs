@@ -47,14 +47,18 @@ impl<'a> StdProcessor<'a> {
         }
     }
 
-    pub fn add_device<D: 'a + Dev>(&mut self, dev: D, port: usize) -> Result<AddDeviceOk, ()> {
+    pub fn add_boxed_device(&mut self, dev: Box<dyn Dev + 'a>, port: usize) -> Result<AddDeviceOk, ()> {
         if port >= self.port_amount { return Err(()) }
 
-        if let Some(_) = self.devs.insert(port, Box::new(dev)) { 
+        if let Some(_) = self.devs.insert(port, dev) { 
             Ok(AddDeviceOk::OldDevDisconected)
         } else {
             Ok(AddDeviceOk::Ok)
-        }
+        }        
+    }
+
+    pub fn add_device<D: 'a + Dev>(&mut self, dev: D, port: usize) -> Result<AddDeviceOk, ()> {
+        self.add_boxed_device(Box::new(dev), port)
     }
 }
 // [-] INIT

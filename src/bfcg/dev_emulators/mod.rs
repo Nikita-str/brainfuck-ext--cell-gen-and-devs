@@ -8,3 +8,4 @@ pub mod dev_name;
 
 pub mod dev_utilities;
 pub mod std_dev;
+pub mod dev_constructor;

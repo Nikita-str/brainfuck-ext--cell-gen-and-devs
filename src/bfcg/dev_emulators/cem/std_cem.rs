@@ -1,6 +1,11 @@
-use std::u8;
-
-use crate::{bfcg::dev_emulators::{dev::Dev, dev_utilities::mem_dev::CellMemDevStartAction}, dev_std_precheck_read_byte, dev_std_precheck_write_byte};
+use crate::{
+    bfcg::dev_emulators::{
+        dev::Dev, 
+        dev_utilities::mem_dev::CellMemDevStartAction, 
+        dev_constructor::{DevCtor, DevCtorErr, DevCtorHelper, DevCtorOk},
+    }, 
+    dev_std_precheck_read_byte, dev_std_precheck_write_byte, dev_ctor_parse_unwrap
+};
 
 use super::cem_inner::{CemInner};
 
@@ -55,6 +60,9 @@ impl DevStdCem {
 // [-] COND HELPER
 // -----------------------------------------------
 
+
+// -----------------------------------------------
+// [+] DEV:
 const DEFAULT:u8 = 0x00;
 const ALGO_ERROR:&'static str = "[ALGO ERROR]";
 
@@ -123,3 +131,27 @@ impl Dev for DevStdCem {
     fn have_error(&self) -> bool { self.error || self.cem_inner.error() }
     fn in_infinity_state(&self) -> bool { self.infinity }
 }
+// [-] DEV
+// -----------------------------------------------
+
+
+// -----------------------------------------------
+// [+] DEV CTOR:
+const DEFAULT_MM_SIZE:usize = 0x10000;
+const DEFAULT_AM_SIZE:usize = 0x10000;
+
+impl DevCtor for DevStdCem {
+    fn dev_ctor(dev_name_params: &std::collections::HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr> {
+        let mut helper = DevCtorHelper::new(dev_name_params);
+        let mm_size = dev_ctor_parse_unwrap!(helper, "mm-sz", DEFAULT_MM_SIZE);
+        let am_size = dev_ctor_parse_unwrap!(helper, "am-sz", DEFAULT_AM_SIZE);
+        
+        helper.add_unused_warn();
+        let warns = helper.take_warn();
+
+        Ok(DevCtorOk::new(Box::new(DevStdCem::new(mm_size, am_size)), warns))
+    }
+}
+// [-] DEV CTOR
+// -----------------------------------------------
+
