@@ -1,7 +1,7 @@
 use std::collections::LinkedList;
 use crate::bfcg::{
     general::{se_fn::std_se_encoding, self}, 
-    compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen, valid_cmd::ValidCMD}, 
+    compiler::{compiler_pos::CompilerPos, compiler_error::CompilerErrorType, code_gen::{self, cgen_set_cell_value}, valid_cmd::ValidCMD}, 
     dev_emulators::dev_utilities::{mem_dev::{CellMemDevStartAction, CmdMemDevStartAction}, win_dev::WinDevStartAction}, 
     vm::hardware_info::HardwareInfo
 };
@@ -30,7 +30,7 @@ pub enum StdCmdNames{
     Set, // 0x03 + CEM: SE
     Read, // 0x04
     Write, // 0x05
-    SetRegConst(u8), // 0x06
+    //SetRegConst(u8), // 0x06
 }
 
 impl StdCmdNames {
@@ -43,7 +43,7 @@ impl StdCmdNames {
             0x03 => Some(Self::Set), 
             0x04 => Some(Self::Read), 
             0x05 => Some(Self::Write), 
-            0x06 => Some(Self::SetRegConst(0xBA)),
+            //0x06 => Some(Self::SetRegConst(0xBA)),
             _ => None 
         }
     }
@@ -58,7 +58,7 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
             Self::Set => one_ll(0x03).into_iter(),
             Self::Read => one_ll(0x04).into_iter(),
             Self::Write => one_ll(0x05).into_iter(),
-            Self::SetRegConst(byte) => add_front_ll(one_ll(*byte), 0x06).into_iter(),
+            //Self::SetRegConst(byte) => add_front_ll(one_ll(*byte), 0x06).into_iter(),
         }
     }
 }
@@ -67,6 +67,7 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
 #[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum RegCmdNames{
+    Zero = 0x06,
     TestZero = 0x07,
     Inc = 0x08,
     Dec = 0x09,
@@ -79,6 +80,7 @@ pub enum RegCmdNames{
 impl RegCmdNames {
     pub fn try_from_byte(byte: u8) -> Option<Self> { // need macros, but .. not now
         match byte {
+            x if x == Self::Zero as u8 => { Some(Self::Zero) }
             x if x == Self::TestZero as u8 => { Some(Self::TestZero) }
             x if x == Self::Inc as u8 => { Some(Self::Inc) }
             x if x == Self::Dec as u8 => { Some(Self::Dec) }
@@ -98,6 +100,7 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for RegCmdNames {
 impl RegCmdNames{
     pub fn try_from_valid_cmd(valid_cmd: ValidCMD) -> Option<Self> {
         match valid_cmd {
+            ValidCMD::ZeroedCell => Some(Self::Zero),
             ValidCMD::IncValue => Some(Self::Inc),
             ValidCMD::DecValue => Some(Self::Dec),
             ValidCMD::LeftShift => Some(Self::LeftShift),
@@ -376,7 +379,18 @@ impl StdCmdCompiler{
 
     #[inline]
     fn ctb_const_write(&mut self, x: u8) {
-        self.ctb_to(StdCmdNames::SetRegConst(x));
+        self.ctb_to(RegCmdNames::Zero);
+        for c in cgen_set_cell_value(x, false).chars() {
+            match c {
+                x if ValidCMD::std_cmd_to_char(ValidCMD::IncValue) == x => {
+                    self.ctb_to(RegCmdNames::try_from_valid_cmd(ValidCMD::IncValue).unwrap())
+                }
+                x if ValidCMD::std_cmd_to_char(ValidCMD::LeftShift) == x => {
+                    self.ctb_to(RegCmdNames::try_from_valid_cmd(ValidCMD::LeftShift).unwrap())
+                }
+                _ => { panic!() }
+            }
+        } 
         self.ctb_to(StdCmdNames::Write);
     }
 
@@ -436,7 +450,7 @@ impl StdCmdCompiler {
                 self.ctb_const_write(CellMemDevStartAction::from_valid_cmd(&valid_cmd) as u8);
 
                 if let ValidCMD::CreateCell = valid_cmd {
-                    self.ctb_to(StdCmdNames::SetRegConst(0x00));
+                    self.ctb_to(RegCmdNames::Zero);
                     self.set_cem_cur_cell_in_reg(true);
                 } else {
                     self.set_cem_cur_cell_in_reg(false);
@@ -447,9 +461,10 @@ impl StdCmdCompiler {
                 self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
             }
             ValidCMD::SetWinValue => {
-                self.ctb_load_cur_cem(); // {*2}
                 self.ctb_set_cur_pr(WIN_PR);
                 self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
+                
+                self.ctb_load_cur_cem(); // {*2}
                 self.ctb_to(StdCmdNames::Write);
             }
             // #############################################################
@@ -490,10 +505,12 @@ impl StdCmdCompiler {
             // #############################################################
             ValidCMD::StartWhileNZ => {
                 self.ctb_unload_cur_cem(); // cause it's value can be changed
-                self.ctb_load_cur_cem(); // cause we need it's value in reg
-
+                
                 self.ctb_set_cur_pr(MEM_CMD_PR);
                 self.ctb_const_write(CmdMemDevStartAction::JumpForward as u8);
+                
+                self.ctb_load_cur_cem(); // cause we need it's value in reg
+                self.ctb_set_cur_pr(MEM_CMD_PR);
                 self.ctb_to(StdCmdNames::Write); // value for jump test (if 0 => jump)
                 
                 let cmd_pos = self.program.len();
@@ -506,10 +523,12 @@ impl StdCmdCompiler {
                 if self.main_info.open_while.is_empty() { return Some(CompilerErrorType::ClosedWhileWithoutOpen) }
 
                 self.ctb_unload_cur_cem(); // cause it's value can be changed
-                self.ctb_load_cur_cem(); // cause we need it's value in reg
-
+                
                 self.ctb_set_cur_pr(MEM_CMD_PR);
                 self.ctb_const_write(CmdMemDevStartAction::JumpBackward as u8);
+
+                self.ctb_load_cur_cem(); // cause we need it's value in reg
+                self.ctb_set_cur_pr(MEM_CMD_PR);
                 self.ctb_to(StdCmdNames::Write); // value for jump test (if !0 => jump)
 
                 let cmd_pos = self.program.len();
@@ -538,7 +557,7 @@ impl StdCmdCompiler {
             }
             ValidCMD::ZeroedCell => {
                 self.ctb_load_cur_cem();
-                self.ctb_to(StdCmdNames::SetRegConst(0x00));
+                self.ctb_to(RegCmdNames::Zero);
             }
             // #############################################################
             _ => panic!("unaccounted cmd {}", valid_cmd.std_to_char()),

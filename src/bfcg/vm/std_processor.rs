@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use crate::bfcg::dev_emulators::dev::Dev;
 use crate::bfcg::compiler::comand_compiler::{MIN_PORT_AMOUNT, MEM_CMD_PR, MEM_CELL_PR, RegCmdNames, StdCmdNames};
+use crate::bfcg::dev_emulators::dev_utilities::mem_dev::CellMemDevStartAction;
+use crate::bfcg::general::se_fn::{MIN_BIG_BYTE, std_se_decoding};
 
 pub struct StdProcessor<'a> {
     // if need impl parallel work with the same dev by dif processor 
@@ -8,7 +10,7 @@ pub struct StdProcessor<'a> {
     devs: HashMap<usize, Box<dyn Dev + 'a>>,
     port_amount: usize,
 
-    byte_await: Option<ProcessorAwaitNextByte>,
+    byte_await: Option<Vec<u8>>,
 
     main_reg: u8,
     port_regs: [usize; PR_AMOUNT],
@@ -52,7 +54,7 @@ impl<'a> StdProcessor<'a> {
 // [-] INIT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-const MODULE: i32 = 1 << 8; // 256
+
 
 impl<'a> StdProcessor<'a> {
     #[inline]
@@ -65,10 +67,17 @@ impl<'a> StdProcessor<'a> {
         let port_reg = self.reg_cur_pr;
         ProcessorRunResult::ErrorDev{ port_reg, port: self.port_regs[port_reg] } 
     }
+
     #[inline]
     fn result_no_dev(&self) -> ProcessorRunResult { 
         let port_reg = self.reg_cur_pr;
         ProcessorRunResult::NoDev{ port_reg, port: self.port_regs[port_reg] } 
+    }
+    
+    #[inline]
+    fn result_inf_dev(&self) -> ProcessorRunResult { 
+        let port_reg = self.reg_cur_pr;
+        ProcessorRunResult::InfinityDev{ port_reg, port: self.port_regs[port_reg] } 
     }
 
     pub fn run(&mut self) -> ProcessorRunResult {
@@ -92,8 +101,30 @@ impl<'a> StdProcessor<'a> {
 
             // ━━━━ ━━━━ ━━━━ ━━━━ ━━━━ ━━━━ ━━━━ ━━━━
             // [+] CMD PROCESSING
+
+            if self.byte_await.is_some() {
+                let byte = cmd;
+
+                let already = self.byte_await.as_mut().unwrap();
+                already.push(byte);
+
+                if byte < MIN_BIG_BYTE { 
+                    let se = std_se_decoding(already.iter());
+                    if se.is_none() { return ProcessorRunResult::ErrorCmd }
+                    
+                    let se_value = se.unwrap();
+                    if se_value > (PR_AMOUNT - 1) { return ProcessorRunResult::ErrorCmd }
+
+                    self.reg_cur_pr = se_value;
+                    self.byte_await = None;
+                }
+
+                continue 'cmd_loop
+            }
+
             if let Some(rcn) = RegCmdNames::try_from_byte(cmd) {
                 match rcn {
+                    RegCmdNames::Zero => { self.main_reg = 0 }
                     RegCmdNames::And => { self.main_reg &= 0b_0000_0001 }
                     RegCmdNames::Bnd => { self.main_reg &= 0b_1000_0000 }
                     RegCmdNames::Inc => { self.main_reg = u8::overflowing_add(self.main_reg, 1).0 }
@@ -108,7 +139,8 @@ impl<'a> StdProcessor<'a> {
 
             if let Some(scn) = StdCmdNames::is_start_byte(cmd) {
                 match scn {
-                    StdCmdNames::Pass => {},
+                    StdCmdNames::Pass => { }
+                    
                     StdCmdNames::Test => {
                         let dev = self.get_cur_dev();
                         
@@ -117,15 +149,61 @@ impl<'a> StdProcessor<'a> {
                         else { false }; // if no dev => we cant read from it
                         
                         self.main_reg = can_read as u8;
-                    },
-                    StdCmdNames::Cur(_) => {
-                        self.byte_await = Some( ProcessorAwaitNextByte::CmdCur { already: vec![] } );
-                    },
+                    }
+                    
+                    StdCmdNames::Cur(_) => { self.byte_await = Some( vec![] ); }
 
-                    StdCmdNames::SetRegConst(_) => {
-                        // TODO: CmdSetRegConst --> ZER
-                        self.byte_await = Some( ProcessorAwaitNextByte::CmdSetRegConst );
-                    },
+                    StdCmdNames::Write => {
+                        let wr_byte = self.main_reg; 
+                        if let Some(dev) = self.get_cur_dev() { dev.write_byte(wr_byte) } 
+                    }
+
+                    StdCmdNames::Read => {
+                        let read_byte;
+
+                        if let Some(dev) = self.get_cur_dev() {  
+                            if dev.have_error() { return self.result_error_dev() }
+                            if dev.in_infinity_state() { return self.result_inf_dev() }
+                            read_byte = dev.read_byte();
+                            if dev.have_error() { return self.result_error_dev() }
+                            if dev.in_infinity_state() { return self.result_inf_dev() }
+                        } 
+                        else { return self.result_no_dev() }
+
+                        self.main_reg = read_byte;
+                    }
+
+                    StdCmdNames::Set => {
+                        let pr_cem = self.port_regs[PR_CEM];
+                        let cem = self.devs.get_mut(&pr_cem);
+                        if cem.is_none() { return ProcessorRunResult::NoCem }
+                        let cem = cem.unwrap();
+            
+                        if cem.have_error() { return ProcessorRunResult::ErrorCem }
+                        if cem.in_infinity_state() { return ProcessorRunResult::InfinityCem }
+            
+                        let mut se = vec![];
+                        'se_read: loop {
+                            let byte = cem.read_byte();
+                            if cem.have_error() { return ProcessorRunResult::ErrorCem }
+                            if cem.in_infinity_state() { return ProcessorRunResult::InfinityCem }
+
+                            cem.write_byte(CellMemDevStartAction::NextCell as u8);
+                            if cem.have_error() { return ProcessorRunResult::ErrorCem }
+                            if cem.in_infinity_state() { return ProcessorRunResult::InfinityCem }
+
+                            se.push(byte);
+                            if byte < MIN_BIG_BYTE { break 'se_read }
+                        }
+
+                        let se_value = 
+                            if let Some(x) = std_se_decoding(se.iter()) { x }
+                            else { return ProcessorRunResult::ErrorCmd };
+                        
+                        if se_value > self.port_amount { return ProcessorRunResult::ErrorCmd }
+
+                        self.port_regs[self.reg_cur_pr] = se_value;
+                    }
                 }
 
                 continue 'cmd_loop
@@ -145,19 +223,21 @@ pub enum AddDeviceOk{
 
 pub enum ProcessorRunResult {
     Ok,
+
     Infinity,
     InfinityCom,
+    InfinityCem,
+    InfinityDev{ port_reg:usize, port:usize },
+
+    ErrorCmd,
 
     ErrorCom,
+    ErrorCem,
     ErrorDev{ port_reg:usize, port:usize },
     
     NoDev{ port_reg:usize, port:usize },
     NoCom,
+    NoCem,
 
-    UnknownCom{cmd: u8},
-}
-
-enum ProcessorAwaitNextByte {
-    CmdCur{ already: Vec<u8> },
-    CmdSetRegConst,
+    UnknownCom{ cmd: u8 },
 }

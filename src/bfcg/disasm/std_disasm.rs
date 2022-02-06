@@ -129,6 +129,9 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
             0x05 => ret.push_str("WR\n"),
             
             0x06 => {
+                ret.push_str("ZER\n");
+            }
+            0x06 => {
                 ret.push_str("SRC[");
                 let cmd = iter.next();
                 let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on SRC")) };
@@ -186,6 +189,7 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
             0x0D => ret.push_str("BND\n"),
             0x0E => ret.push_str("ZER\n"),
             
+            _ => ret.push_str(&format!("[{}]", cmd)),
             _ => return Err(format!("unknown cmd byte {}", cmd)),
         }
 
