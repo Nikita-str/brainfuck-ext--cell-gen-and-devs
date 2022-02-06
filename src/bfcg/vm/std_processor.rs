@@ -12,10 +12,14 @@ pub struct StdProcessor<'a> {
 
     byte_await: Option<Vec<u8>>,
 
-    main_reg: u8,
+    main_regs: [u8; MR_AMOUNT],
+    reg_cur_mr: usize,
+
     port_regs: [usize; PR_AMOUNT],
     reg_cur_pr: usize,
 }
+
+const MR_AMOUNT:usize = 2;
 
 const PR_AMOUNT:usize = MIN_PORT_AMOUNT + 1;
 const PR_COM:usize = MEM_CMD_PR;
@@ -35,7 +39,9 @@ impl<'a> StdProcessor<'a> {
 
             byte_await: None,
 
-            main_reg: 0,
+            main_regs: [0; 2],
+            reg_cur_mr: 0,
+
             port_regs,
             reg_cur_pr: 0,
         }
@@ -80,6 +86,11 @@ impl<'a> StdProcessor<'a> {
         ProcessorRunResult::InfinityDev{ port_reg, port: self.port_regs[port_reg] } 
     }
 
+    #[inline]
+    fn get_main_reg(&self) -> u8 { self.main_regs[self.reg_cur_mr] }
+    #[inline]
+    fn set_main_reg(&mut self, value: u8) { self.main_regs[self.reg_cur_mr] = value; }
+
     pub fn run(&mut self) -> ProcessorRunResult {
         'cmd_loop: loop {
             // ━━━━ ━━━━ ━━━━ ━━━━ ━━━━ ━━━━ ━━━━ ━━━━
@@ -123,15 +134,16 @@ impl<'a> StdProcessor<'a> {
             }
 
             if let Some(rcn) = RegCmdNames::try_from_byte(cmd) {
+                let mr_value = self.get_main_reg();
                 match rcn {
-                    RegCmdNames::Zero => { self.main_reg = 0 }
-                    RegCmdNames::And => { self.main_reg &= 0b_0000_0001 }
-                    RegCmdNames::Bnd => { self.main_reg &= 0b_1000_0000 }
-                    RegCmdNames::Inc => { self.main_reg = u8::overflowing_add(self.main_reg, 1).0 }
-                    RegCmdNames::Dec => { self.main_reg = u8::overflowing_sub(self.main_reg, 1).0 }
-                    RegCmdNames::LeftShift => { self.main_reg <<= 1 }
-                    RegCmdNames::RightShift => { self.main_reg >>= 1 }
-                    RegCmdNames::TestZero => { self.main_reg = if self.main_reg == 0 { 0 } else { 1 }  }
+                    RegCmdNames::Zero => { self.set_main_reg(0) }
+                    RegCmdNames::And => { self.set_main_reg(mr_value & 0b_0000_000_1) }
+                    RegCmdNames::Bnd => { self.set_main_reg(mr_value & 0b_1_000_0000) }
+                    RegCmdNames::Inc => { self.set_main_reg(u8::overflowing_add(mr_value, 1).0) }
+                    RegCmdNames::Dec => { self.set_main_reg(u8::overflowing_sub(mr_value, 1).0) }
+                    RegCmdNames::LeftShift =>  { self.set_main_reg(mr_value << 1) }
+                    RegCmdNames::RightShift => { self.set_main_reg(mr_value >> 1) }
+                    RegCmdNames::TestZero => { self.set_main_reg(if mr_value == 0 { 0 } else { 1 })  }
                 }
 
                 continue 'cmd_loop
@@ -148,13 +160,13 @@ impl<'a> StdProcessor<'a> {
                         if let Some(dev) = dev {  dev.test_can_read_byte() } 
                         else { false }; // if no dev => we cant read from it
                         
-                        self.main_reg = can_read as u8;
+                        self.set_main_reg(can_read as u8);
                     }
                     
                     StdCmdNames::Cur(_) => { self.byte_await = Some( vec![] ); }
 
                     StdCmdNames::Write => {
-                        let wr_byte = self.main_reg; 
+                        let wr_byte = self.get_main_reg(); 
                         if let Some(dev) = self.get_cur_dev() { dev.write_byte(wr_byte) } 
                     }
 
@@ -170,7 +182,7 @@ impl<'a> StdProcessor<'a> {
                         } 
                         else { return self.result_no_dev() }
 
-                        self.main_reg = read_byte;
+                        self.set_main_reg(read_byte);
                     }
 
                     StdCmdNames::Set => {
@@ -204,6 +216,8 @@ impl<'a> StdProcessor<'a> {
 
                         self.port_regs[self.reg_cur_pr] = se_value;
                     }
+
+                    StdCmdNames::SwapMainReg => { self.reg_cur_mr = (self.reg_cur_mr + 1) % MR_AMOUNT; }
                 }
 
                 continue 'cmd_loop

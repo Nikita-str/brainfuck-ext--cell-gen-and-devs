@@ -95,13 +95,19 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
 
     let mut iter = program;
     let mut cur_dev = None;
+
+    let mut swap = false;
+    let mut swap_value = 0u8;
+    let mut it_is_swap_act = false;
+    let mut first_swap = true;
+    
     loop {
         let cmd = iter.next();
         let cmd = if let Some(cmd) = cmd { *cmd } else { break; };
 
         match cmd {
-            0x00 => ret.push_str("PASS\n"),
-            0x01 => ret.push_str("TEST\n"),
+            0x00 => ret.push_str("PASS"),
+            0x01 => ret.push_str("TEST"),
 
             0x02 => {
                 ret.push_str("CUR[");
@@ -124,75 +130,68 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
                 ret.push_str("]\n");
             }
 
-            0x03 => ret.push_str("SET\n"),
-            0x04 => ret.push_str("READ\n"),
-            0x05 => ret.push_str("WR\n"),
+            0x03 => ret.push_str("SET"),
+            0x04 => ret.push_str("READ"),
+            0x05 => ret.push_str("WR"),
             
             0x06 => {
-                ret.push_str("ZER\n");
-            }
-            0x06 => {
-                ret.push_str("SRC[");
-                let cmd = iter.next();
-                let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on SRC")) };
-                if let Some(x) = cur_dev {
-                    if let Some(act) = dev_action.get(&(x, cmd as usize)) {
-                        ret.push_str(act); 
-                        ret.push(']'); 
-                        
-                        if x == StdDevName::CmdMem {
-                            // hehe, previously we do: 
-                            // CW[CMD]  // write in port byte = CMD
-                            // WR       // write cur value
-                            // SE       // jmp SE seq
-                            //
-                            // now we do:
-                            // SRW[CMD] // set reg value in CMD
-                            // WR       // write seted value
-                            // WR       // write cur value
-                            // SE       // jmp SE seq
-
-                            for _ in 0..2 {
-                                let cmd = iter.next();
-                                let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on JMP")) };
-                                if cmd != 0x05 {return Err(format!("after JMP stay not WR")) }
-                                ret.push_str(" WR ");
-                            }
-
-                            let mut se = vec![];
-                            loop {
-                                let cmd = iter.next();
-                                let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on not finished JMP SE")) };
-                                se.push(cmd);
-                                if cmd < MIN_BIG_BYTE { break; }
-                            }
-                            let shift = std_se_decoding(se.iter());  
-                            let shift = if let Some(shift) = shift { shift } else { return Err(format!("bad se seq in JMP SE")) };
-                            ret.push_str(&format!("[{}]", shift));
+                ret.push_str("SWAP ");
+                swap = !swap;
+                if swap { it_is_swap_act = true; }
+                if !swap {
+                    if let Some(dev) = cur_dev{
+                        if let Some(act) = dev_action.get(&(dev, swap_value as usize)) {
+                            ret.push_str(&format!(" ;; CWR[{}]", act));
+                        } else {
+                            ret.push_str(&format!(" ;; CWR[{}]", swap_value));
                         }
+                    } else {
+                        ret.push_str(&format!(" ;; CWR[{}]", swap_value));
+                    } 
 
-                        ret.push('\n'); 
-                    } else { 
-                        ret.push_str(&format!("{}]\n", cmd)); 
+                    if first_swap {
+                        ret.push_str("     {*1}: if compiled by std compiler => this is CWR cmd ([C]onst [WR]ite)");
+                    } else {
+                        ret.push_str("      (check {*1})");
                     }
+                    first_swap = false;
                 }
-                else { ret.push_str(&format!("{}]\n", cmd)); }
-                
             }
             
-            0x07 => ret.push_str("TZ\n"),
-            0x08 => ret.push_str("INC\n"),
-            0x09 => ret.push_str("DEC\n"),
-            0x0A => ret.push_str("LSH\n"),
-            0x0B => ret.push_str("RSH\n"),
-            0x0C => ret.push_str("AND\n"),
-            0x0D => ret.push_str("BND\n"),
-            0x0E => ret.push_str("ZER\n"),
+            0x07 => ret.push_str("TZ"),
+            0x08 => {
+                ret.push_str("INC");
+                if swap { 
+                    swap_value = u8::overflowing_add(swap_value, 1).0; 
+                    it_is_swap_act = true;
+                }
+            }
+            0x09 => ret.push_str("DEC"),
+            0x0A => {
+                ret.push_str("LSH");
+                if swap { 
+                    swap_value <<= 1; 
+                    it_is_swap_act = true;
+                }
+            }
+            0x0B => ret.push_str("RSH"),
+            0x0C => ret.push_str("AND"),
+            0x0D => ret.push_str("BND"),
+            0x0E => {
+                ret.push_str("ZER");
+                if swap { 
+                    swap_value = 0; 
+                    it_is_swap_act = true;
+                }
+            }
             
-            _ => ret.push_str(&format!("[{}]", cmd)),
-            _ => return Err(format!("unknown cmd byte {}", cmd)),
+            _ => ret.push_str(&format!("![{}]", cmd)),
+            // _ => return Err(format!("unknown cmd byte {}", cmd)),
         }
 
+        if swap && !it_is_swap_act { swap = false; ret.push_str(" ;; ! sorry, maybe they shouldn't be on the same line "); }
+
+        ret.push(if swap { ' ' } else { '\n' });
     }
 
     Ok(ret)

@@ -30,7 +30,8 @@ pub enum StdCmdNames{
     Set, // 0x03 + CEM: SE
     Read, // 0x04
     Write, // 0x05
-    //SetRegConst(u8), // 0x06
+    SwapMainReg, // 0x06   // if we need N main reg then we can cyclic swap!
+    //SetRegConst(u8), // 0x06  bf with const??? it is stupid
 }
 
 impl StdCmdNames {
@@ -43,6 +44,7 @@ impl StdCmdNames {
             0x03 => Some(Self::Set), 
             0x04 => Some(Self::Read), 
             0x05 => Some(Self::Write), 
+            0x06 => Some(Self::SwapMainReg),
             //0x06 => Some(Self::SetRegConst(0xBA)),
             _ => None 
         }
@@ -58,7 +60,7 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
             Self::Set => one_ll(0x03).into_iter(),
             Self::Read => one_ll(0x04).into_iter(),
             Self::Write => one_ll(0x05).into_iter(),
-            //Self::SetRegConst(byte) => add_front_ll(one_ll(*byte), 0x06).into_iter(),
+            Self::SwapMainReg => one_ll(0x06).into_iter(),
         }
     }
 }
@@ -67,7 +69,6 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
 #[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum RegCmdNames{
-    Zero = 0x06,
     TestZero = 0x07,
     Inc = 0x08,
     Dec = 0x09,
@@ -75,6 +76,7 @@ pub enum RegCmdNames{
     RightShift = 0x0B,
     And = 0x0C,
     Bnd = 0x0D,
+    Zero = 0x0E,
 }
 
 impl RegCmdNames {
@@ -100,7 +102,6 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for RegCmdNames {
 impl RegCmdNames{
     pub fn try_from_valid_cmd(valid_cmd: ValidCMD) -> Option<Self> {
         match valid_cmd {
-            ValidCMD::ZeroedCell => Some(Self::Zero),
             ValidCMD::IncValue => Some(Self::Inc),
             ValidCMD::DecValue => Some(Self::Dec),
             ValidCMD::LeftShift => Some(Self::LeftShift),
@@ -108,6 +109,7 @@ impl RegCmdNames{
             ValidCMD::And => Some(Self::And),
             ValidCMD::Bnd => Some(Self::Bnd),
             ValidCMD::TestZeroCell => Some(Self::TestZero),
+            ValidCMD::ZeroedCell => Some(Self::Zero),
             _ => None,
         }
     }
@@ -379,8 +381,10 @@ impl StdCmdCompiler{
 
     #[inline]
     fn ctb_const_write(&mut self, x: u8) {
+        self.ctb_to(StdCmdNames::SwapMainReg);
         self.ctb_to(RegCmdNames::Zero);
-        for c in cgen_set_cell_value(x, false).chars() {
+        let cmd_gen = cgen_set_cell_value(x, false);
+        for c in cmd_gen.chars() {
             match c {
                 x if ValidCMD::std_cmd_to_char(ValidCMD::IncValue) == x => {
                     self.ctb_to(RegCmdNames::try_from_valid_cmd(ValidCMD::IncValue).unwrap())
@@ -392,6 +396,7 @@ impl StdCmdCompiler{
             }
         } 
         self.ctb_to(StdCmdNames::Write);
+        self.ctb_to(StdCmdNames::SwapMainReg);
     }
 
     #[inline]
@@ -505,12 +510,10 @@ impl StdCmdCompiler {
             // #############################################################
             ValidCMD::StartWhileNZ => {
                 self.ctb_unload_cur_cem(); // cause it's value can be changed
-                
-                self.ctb_set_cur_pr(MEM_CMD_PR);
-                self.ctb_const_write(CmdMemDevStartAction::JumpForward as u8);
-                
                 self.ctb_load_cur_cem(); // cause we need it's value in reg
+                
                 self.ctb_set_cur_pr(MEM_CMD_PR);
+                self.ctb_const_write(CmdMemDevStartAction::JumpForward as u8);                
                 self.ctb_to(StdCmdNames::Write); // value for jump test (if 0 => jump)
                 
                 let cmd_pos = self.program.len();
@@ -523,12 +526,10 @@ impl StdCmdCompiler {
                 if self.main_info.open_while.is_empty() { return Some(CompilerErrorType::ClosedWhileWithoutOpen) }
 
                 self.ctb_unload_cur_cem(); // cause it's value can be changed
+                self.ctb_load_cur_cem(); // cause we need it's value in reg
                 
                 self.ctb_set_cur_pr(MEM_CMD_PR);
                 self.ctb_const_write(CmdMemDevStartAction::JumpBackward as u8);
-
-                self.ctb_load_cur_cem(); // cause we need it's value in reg
-                self.ctb_set_cur_pr(MEM_CMD_PR);
                 self.ctb_to(StdCmdNames::Write); // value for jump test (if !0 => jump)
 
                 let cmd_pos = self.program.len();
@@ -554,9 +555,10 @@ impl StdCmdCompiler {
                 self.ctb_load_cur_cem(); // {*2}
                 let res = self.cmd_compile_inner(ValidCMD::NextCell, pos);
                 if res.is_some() { return res }
+                self.set_cem_cur_cell_in_reg(true);
             }
             ValidCMD::ZeroedCell => {
-                self.ctb_load_cur_cem();
+                self.set_cem_cur_cell_in_reg(true);
                 self.ctb_to(RegCmdNames::Zero);
             }
             // #############################################################

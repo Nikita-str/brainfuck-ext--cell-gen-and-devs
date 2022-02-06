@@ -10,23 +10,19 @@ pub fn cgen_set_cell_value(value: u8, need_nullify: bool) -> String{
     ret
 }
 
-pub fn add_cgen_set_cell_value(cgen: &mut String, mut value: u8, need_nullify: bool) {
+pub fn add_cgen_set_cell_value(cgen: &mut String, value: u8, need_nullify: bool) {
     if need_nullify { cgen.push(ValidCMD::ZeroedCell.std_to_char()); }
 
-    let mut reverse_it = vec![];
-    if (value & 1) == 1 { 
-        // just delete excess left-shift ('*')
-        reverse_it.push(ValidCMD::IncValue.std_to_char()); 
-        value >>= 1;
+    let mut mask: u8 = 0x80;
+    let mut first = true;
+    while mask > 0 {
+        if !first {cgen.push(ValidCMD::LeftShift.std_to_char()) } 
+        if (mask & value) > 0 {
+            cgen.push(ValidCMD::IncValue.std_to_char());
+            first = false;
+        }
+        mask >>= 1;
     }
-    
-    while value > 0 {
-        reverse_it.push(ValidCMD::LeftShift.std_to_char());
-        if (value & 1) == 1 { reverse_it.push(ValidCMD::IncValue.std_to_char()); }
-        value >>= 1;
-    }
-
-    for x in reverse_it.iter().rev() { cgen.push(*x) }
 }
 
 
