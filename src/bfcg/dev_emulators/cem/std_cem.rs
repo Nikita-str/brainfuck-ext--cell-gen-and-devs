@@ -72,7 +72,11 @@ impl Dev for DevStdCem {
 
         let value = self.cem_inner.get_value();
 
-        if let Some(x) = value { return x }
+        if let Some(x) = value { 
+            assert!(matches!(self.start_byte_seq, Some(CellMemDevStartAction::GetCellValue)));
+            self.start_byte_seq = None;
+            return x 
+        }
         else {
             if self.have_error() { return DEFAULT }
             else { panic!("{}", ALGO_ERROR) }

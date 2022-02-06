@@ -23,6 +23,7 @@ fn one_ll(x: u8) -> LinkedList<u8> {
     ll
  }
 
+ #[derive(Debug)]
 pub enum StdCmdNames{
     Pass, // 0x00
     Test, // 0x01
@@ -66,7 +67,7 @@ impl ToU8Seq<<LinkedList<u8> as IntoIterator>::IntoIter> for StdCmdNames {
 }
 
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum RegCmdNames{
     TestZero = 0x07,
@@ -253,7 +254,8 @@ impl StdCmdCompiler{
 
         let cur_port_reg = 0;
         for x in StdCmdNames::Cur(cur_port_reg).to_u8_seq() { ret.push(x); }
-        for x in StdCmdNames::Set.to_u8_seq() { ret.push(x); }
+        for x in StdCmdNames::Set.to_u8_seq() { ret.push(x); }  // TODO:DEL:??? (when windev will - decide)
+        for x in RegCmdNames::Zero.to_u8_seq() { ret.push(x); }
 
         self.cancel_pseudo(Some(cur_port_reg));        
         ret
@@ -311,6 +313,8 @@ impl StdCmdCompiler{
             };
         for byte in StdCmdNames::Cur(cur).to_u8_seq() { set_byte(self, &mut cgen_compiled_sz, byte); }
         for byte in StdCmdNames::Set.to_u8_seq() { set_byte(self, &mut cgen_compiled_sz, byte); }
+        self.main_info.set_cur_pr_invalid();
+        self.set_cem_cur_cell_in_reg(false);
 
         // #############################################
         // CGEN[END]   
@@ -341,7 +345,7 @@ impl StdCmdCompiler{
         } else {
             self.main_info.set_cur_pr_invalid();
         }
-        self.main_info.cem_cur_cell_in_reg = false;
+        self.set_cem_cur_cell_in_reg(false);
     }
 
     fn get_cur_pr(&self) -> usize { self.main_info.get_cur_pr() }
@@ -467,9 +471,9 @@ impl StdCmdCompiler {
             }
             ValidCMD::SetWinValue => {
                 self.ctb_set_cur_pr(WIN_PR);
-                self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
-                
                 self.ctb_load_cur_cem(); // {*2}
+
+                self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
                 self.ctb_to(StdCmdNames::Write);
             }
             // #############################################################
@@ -536,13 +540,13 @@ impl StdCmdCompiler {
                 let prev_open = self.main_info.open_while.pop().unwrap();
 
                 let mut backward_shift_cmd_len = 0;
-                let backward_jump = cmd_pos - prev_open.cmd_pos + self.get_jump_pass_amount();
+                let backward_jump = cmd_pos - prev_open.cmd_pos - self.get_jump_pass_amount();
                 for x in std_se_encoding(backward_jump) { 
                     self.program.push(x); 
                     backward_shift_cmd_len += 1;
                 }
 
-                let forward_jump = backward_jump + backward_shift_cmd_len;
+                let forward_jump = backward_jump + backward_shift_cmd_len + self.get_jump_pass_amount();
                 if forward_jump > self.main_info.get_max_jump_size() { return Some(CompilerErrorType::Other("too big jump".to_owned())) }
                 for (ind, x) in std_se_encoding(forward_jump).into_iter().enumerate() { 
                     let value_must_0 = std::mem::replace(&mut self.program[prev_open.cmd_pos + ind], x);

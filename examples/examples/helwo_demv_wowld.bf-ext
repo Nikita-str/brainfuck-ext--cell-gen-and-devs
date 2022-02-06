@@ -1,5 +1,5 @@
 ;; this example write in std-out "helwo demvice wowld?".
-;; the output phrase is a slurred phrase "hello device world!"
+;; the output phrase is a slurred phrase "hello device world!\n"
 
 ;; ASCII seq: 104 101 108 119 111 32 100 101 109 118 105 99 101 32 119 111 119 108 100 63
 
@@ -12,7 +12,7 @@
 ; % macro-name % - macro use 
 
 # from-space-to-? # *- #
-# 100 #z+*+***+***#
+# 100 #z+*+***+**#
 # +4 # ++++ #
 # -3 # --- #
 # 0b111 # +*+*+ #
@@ -55,4 +55,6 @@
 -.                  ; 100        'd'
 >>>                 ; CEM[3]:
 %from-space-to-?%.  ; 63         '?'
+<                   ; CEM[2]:
+%<<2% %>>4% -.      ; 10         '\n'
 

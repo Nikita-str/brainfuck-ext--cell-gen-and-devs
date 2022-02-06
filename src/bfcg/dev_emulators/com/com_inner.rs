@@ -79,12 +79,14 @@ impl ComInner{
         if self.mem.len() <= self.cur_pos {
             self.mem.resize(self.cur_pos, 0x00);
         }
+        println!("TODO:DEL: JMP-->; from {} to {}", self.cur_pos - jmp_len, self.cur_pos);
     }
 
     /// ~ move backward jmp_len times 
     pub fn jump_backward(&mut self, jmp_len: usize) {
         if self.error { return }
         if jmp_len > self.cur_pos { self.error = true; return }
+        println!("TODO:DEL: <--JMP; from {} to {}", self.cur_pos, self.cur_pos - jmp_len);
         self.cur_pos -= jmp_len;
     }
 }

@@ -138,6 +138,15 @@ fn compiler_test_u8_helwo_wowld() {
 
     let ok = result.ok().unwrap();
 
+    let mut file = std::fs::File::create("target/tmp/u8_helwo_wowld.bin").ok().unwrap();
+    if file.write_all(ok.get_ref_program()).is_err() { panic!("cant write in file") };
+    
+    let mut disasm_info = StdDisasmInfo::new();
+    disasm_info.std_init();
+    let disasm = std_disasm(ok.get_ref_program().into_iter(), &disasm_info).ok().unwrap();
+    let mut file = std::fs::File::create("target/tmp/u8_helwo_wowld.disasm").ok().unwrap();
+    if file.write_all(disasm.as_bytes()).is_err() { panic!("cant write in file") };
+
     let mut processor = StdProcessor::new(
         hardware_info.max_port_amount, 
         hardware_info.default_com_port, 
@@ -167,7 +176,10 @@ fn compiler_test_u8_helwo_wowld() {
     }
 
 
-    let com = Box::new(DevStdCom::new(0x10_00));    
+    let mut com = Box::new(DevStdCom::new(0x10_00));    
+    com.init(ok.get_ref_program().iter());
+    com.move_to_start();
+
     let cem = Box::new(DevStdCem::new(0x10_00, 0x10_00));
 
     let x = processor.add_device_boxed(com, hardware_info.default_com_port);
@@ -179,10 +191,10 @@ fn compiler_test_u8_helwo_wowld() {
     if let AddDeviceOk::OldDevDisconected = x.ok().unwrap() { panic!("must be ::Ok") }
 
     println!("[+] RUN");
-    println!("\n-----------------------\n");
+    println!("-----------------------");
     let z = processor.run();
     if let ProcessorRunResult::Ok = z { }
-    else { panic!() }
-    println!("\n-----------------------\n");
+    else { println!("{}", z.to_string()); panic!() }
+    println!("-----------------------");
     println!("[-] RUN");
 }

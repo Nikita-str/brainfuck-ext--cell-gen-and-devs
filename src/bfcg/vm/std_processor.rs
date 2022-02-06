@@ -118,6 +118,7 @@ impl<'a> StdProcessor<'a> {
             // [+] CMD PROCESSING
 
             if self.byte_await.is_some() {
+                //println!("              [AWAIT]");
                 let byte = cmd;
 
                 let already = self.byte_await.as_mut().unwrap();
@@ -138,6 +139,7 @@ impl<'a> StdProcessor<'a> {
             }
 
             if let Some(rcn) = RegCmdNames::try_from_byte(cmd) {
+                //println!("              [CMD]: {:?}", rcn);
                 let mr_value = self.get_main_reg();
                 match rcn {
                     RegCmdNames::Zero => { self.set_main_reg(0) }
@@ -154,6 +156,7 @@ impl<'a> StdProcessor<'a> {
             }
 
             if let Some(scn) = StdCmdNames::is_start_byte(cmd) {
+                //println!("              [CMD]: {:?}", scn);
                 match scn {
                     StdCmdNames::Pass => { }
                     
@@ -190,6 +193,7 @@ impl<'a> StdProcessor<'a> {
                     }
 
                     StdCmdNames::Set => {
+                        println!("TODO:DEL: [+][PROC]: SET {:?}", self.port_regs);
                         let pr_cem = self.port_regs[PR_CEM];
                         let cem = self.devs.get_mut(&pr_cem);
                         if cem.is_none() { return ProcessorRunResult::NoCem }
@@ -200,6 +204,7 @@ impl<'a> StdProcessor<'a> {
             
                         let mut se = vec![];
                         'se_read: loop {
+                            cem.write_byte(CellMemDevStartAction::GetCellValue as u8);
                             let byte = cem.read_byte();
                             if cem.have_error() { return ProcessorRunResult::ErrorCem }
                             if cem.in_infinity_state() { return ProcessorRunResult::InfinityCem }
@@ -215,10 +220,12 @@ impl<'a> StdProcessor<'a> {
                         let se_value = 
                             if let Some(x) = std_se_decoding(se.iter()) { x }
                             else { return ProcessorRunResult::ErrorCmd };
+                        println!("TODO:DEL: [PROC]: SE = {:?}", se_value);
                         
                         if se_value > self.port_amount { return ProcessorRunResult::ErrorCmd }
 
                         self.port_regs[self.reg_cur_pr] = se_value;
+                        println!("TODO:DEL: [-][PROC]: SET {:?}", self.port_regs);
                     }
 
                     StdCmdNames::SwapMainReg => { self.reg_cur_mr = (self.reg_cur_mr + 1) % MR_AMOUNT; }
@@ -242,7 +249,6 @@ pub enum AddDeviceOk{
 pub enum ProcessorRunResult {
     Ok,
 
-    Infinity,
     InfinityCom,
     InfinityCem,
     InfinityDev{ port_reg:usize, port:usize },
@@ -258,4 +264,28 @@ pub enum ProcessorRunResult {
     NoCem,
 
     UnknownCom{ cmd: u8 },
+}
+
+impl ToString for ProcessorRunResult {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Ok => String::from("OK"),
+
+            Self::InfinityDev{port_reg, port} => format!("ERROR: device on port {} (port reg is {}) is in infinity run state", port, port_reg),
+            Self::InfinityCom => String::from("ERROR: command memory is in infinity run state"),
+            Self::InfinityCem => String::from("ERROR: cell memory is in infinity run state"),
+
+            Self::ErrorCmd => String::from("ERROR: wrong cmd-seq"),
+
+            Self::ErrorCom => String::from("ERROR: an error occured in command memory"),
+            Self::ErrorCem => String::from("ERROR: an error occured in cell memory"),
+            Self::ErrorDev{ port_reg, port } => format!("ERROR: an error occured on port {} (port reg is {})", port, port_reg),
+
+            Self::NoCom => String::from("ERROR: command memory device not connected"),
+            Self::NoCem => String::from("ERROR: cell memory device not connected"),
+            Self::NoDev{ port_reg, port } => format!("ERROR: device on port {} (port reg is {}) not connected", port, port_reg),
+
+            Self::UnknownCom{cmd} => format!("ERROR: unknown command ({:02X})", cmd),
+        }
+    }
 }
