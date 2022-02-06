@@ -110,7 +110,7 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
             0x01 => ret.push_str("TEST"),
 
             0x02 => {
-                ret.push_str("CUR[");
+                ret.push_str("\nCUR[");
                 let mut se = vec![];
                 loop {
                     let cmd = iter.next();
@@ -127,7 +127,7 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
                     ret.push_str(&port_reg.to_string());
                     cur_dev = None;
                 }
-                ret.push_str("]\n");
+                ret.push_str("]");
             }
 
             0x03 => ret.push_str("SET"),
@@ -139,12 +139,35 @@ pub fn std_disasm<'a, Iter: Iterator<Item = &'a u8>>(program: Iter, disasm_info:
                 swap = !swap;
                 if swap { it_is_swap_act = true; }
                 if !swap {
-                    if let Some(dev) = cur_dev{
+                    if let Some(dev) = cur_dev {
+                        let mut jmp = false;
+
+                        if dev == StdDevName::CmdMem {
+                            let cmd = iter.next();
+                            let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on JMP")) };
+                            if cmd != 0x05 {return Err(format!("after JMP stay not WR")) }
+                            ret.push_str(" WR ");
+
+                            let mut se = vec![];
+                            loop {
+                                let cmd = iter.next();
+                                let cmd = if let Some(cmd) = cmd { *cmd } else { return Err(format!("program ended on not finished JMP SE")) };
+                                se.push(cmd);
+                                if cmd < MIN_BIG_BYTE { break; }
+                            }
+                            let shift = std_se_decoding(se.iter());  
+                            let shift = if let Some(shift) = shift { shift } else { return Err(format!("bad se seq in JMP SE")) };
+                            ret.push_str(&format!("[{}]", shift));
+                            jmp = true;
+                        }
+
                         if let Some(act) = dev_action.get(&(dev, swap_value as usize)) {
                             ret.push_str(&format!(" ;; CWR[{}]", act));
+                            if jmp { ret.push_str(" + JMP-READ + JMP-DELTA "); }
                         } else {
                             ret.push_str(&format!(" ;; CWR[{}]", swap_value));
                         }
+
                     } else {
                         ret.push_str(&format!(" ;; CWR[{}]", swap_value));
                     } 
