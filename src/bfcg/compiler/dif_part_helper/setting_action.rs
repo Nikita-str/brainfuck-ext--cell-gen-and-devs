@@ -1,4 +1,4 @@
-use crate::bfcg::{compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType}, vm::port::Port, dev_emulators::dev_utilities::right_std_dev_name};
+use crate::bfcg::{compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType}, vm::port::Port, dev_emulators::{dev_utilities::right_std_dev_name, dev_name::DevName}};
 
 use super::{settings::Setting, setting_action_result::SettingActionResult};
 
@@ -32,10 +32,11 @@ impl<T> SettingActions<T> {
     #[allow(non_snake_case)]
     fn std_action__add_dev(actions: &mut Self) {
         actions.add_action(|setting, c_info|{
-            if setting.params.len() < 1 { return SAR::new_no() }
+            let plen = setting.params.len();
+            if plen < 1 { return SAR::new_no() }
             if setting.params[0].param != "dev" { return SAR::new_no() }
-            if setting.params.len() == 1 { return SAR::new_error("after dev must stay dev name.\ngeneral form: 'dev[dev_port]:dev-name'") }
-            if setting.params.len() > 2 { return SAR::new_error("too many parameters for dev setting") }
+            if plen == 1 { return SAR::new_error("after dev must stay dev name.\ngeneral form: 'dev[dev_port]:dev-name:pname0=pvalue0:...:pnameN=pvalueN'") }
+            // if setting.params.len() > 2 { return SAR::new_error("too many parameters for dev setting") }
             if setting.params[1].param.len() == 0 { return SAR::new_error("empty device name")  }
             if setting.params[0].additional_params.len() > 1 { return SAR::new_error("too many aditional params for dev (was 'dev[x|y]' must 'dev[x]')") }
             if setting.params[1].additional_params.len() > 0 { return SAR::new_error("too many aditional params for dev-name (was 'dev[...]:x[y]' must 'dev[...]:x')") }
@@ -55,8 +56,29 @@ impl<T> SettingActions<T> {
 
             if let Port::Number(0) = port { ret.add_warning_by_ref("use of 0-port is not recommended"); }
 
-            if let Some(prev_name) = c_info.add_dev(port, dev_name.to_owned()) {
-                ret.add_warning("device [".to_owned() + dev_name + "] stay instead device [" + &prev_name + "]");
+            // --------------------------
+            // [+] DEV NAME
+            let mut dev_name = DevName::new(dev_name.to_owned());
+
+            for ind in 2..plen {
+                if setting.params[ind].additional_params.len() != 0 { return SAR::new_error("device params must be without additional params!") }
+                let dev_param = &setting.params[ind].param;
+                let dev_param_name;
+                let dev_param_value;
+                let mut split = dev_param.splitn(2, "=");
+                if let Some(x) = split.next() { dev_param_name = x.trim().to_owned(); }
+                else { return SAR::new_error("empty device param") }
+                if let Some(x) = split.next() { dev_param_value = x.trim().to_owned(); }
+                else { return SAR::new_error("no device parameter") }
+                dev_name.add_param(dev_param_name, dev_param_value);
+            }
+
+            let dev_name_str = dev_name.to_string();
+            // [-] DEV NAME
+            // --------------------------
+
+            if let Some(prev_name) = c_info.add_dev(port, dev_name) {
+                ret.add_warning("device [".to_owned() + &dev_name_str + "] stay instead device [" + &prev_name.to_string() + "]");
             } 
             return ret
         });

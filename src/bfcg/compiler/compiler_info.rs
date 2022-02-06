@@ -1,15 +1,20 @@
 use std::collections::HashMap;
 
-use crate::bfcg::vm::port::Port;
+use crate::bfcg::{vm::port::Port, dev_emulators::dev_name::DevName};
 
-use super::{dif_part_helper::{settings::Setting, setting_action_result::SettingActionResult}, mem_init::MemInit, compiler_warning::{CompilerWarnings, CompilerWarning}, comand_compiler::CmdCompiler, compiler_option::{CompilerOption, MemInitType}, compiler_pos::CompilerPos, compiler_error::IncludeError, compiler_inter_info::CompilerInterInfo};
+use super::{
+    dif_part_helper::{settings::Setting, setting_action_result::SettingActionResult}, mem_init::MemInit, 
+    compiler_warning::{CompilerWarnings, CompilerWarning}, comand_compiler::CmdCompiler, 
+    compiler_option::{CompilerOption, MemInitType}, compiler_pos::CompilerPos, 
+    compiler_error::IncludeError, compiler_inter_info::CompilerInterInfo
+};
 
 #[derive(Debug)]
 pub struct CompilerInfo<T>{
     mem_init: MemInit,
     program: Vec<T>,
     port_names: HashMap<String, usize>,
-    devs: HashMap<Port, String>, // map port to dev name
+    devs: HashMap<Port, DevName>, // map port to dev name
     macros: HashMap<String, String>, // map name of macros to code
 
     warnings: CompilerWarnings,
@@ -66,14 +71,14 @@ impl<T> CompilerInfo<T>{
         } else { None }
     }
 
-    fn add_dev_need_warning(&self, port: &Port, dev_name: &str) -> bool {
+    fn add_dev_need_warning(&self, port: &Port, dev_name: &DevName) -> bool {
         if let Some(old_dev_name) = self.devs.get(port) {
             old_dev_name != dev_name
         } else { false }
     }
-    pub fn add_dev(&mut self, port: Port, dev_name: String) -> Option<String> { self.devs.insert(port, dev_name) }
-    pub fn get_devs(&self) -> &HashMap<Port, String> { &self.devs }
-    pub fn get_mut_devs(&mut self) -> &mut HashMap<Port, String> { &mut self.devs }
+    pub fn add_dev(&mut self, port: Port, dev_name: DevName) -> Option<DevName> { self.devs.insert(port, dev_name) }
+    pub fn get_devs(&self) -> &HashMap<Port, DevName> { &self.devs }
+    pub fn get_mut_devs(&mut self) -> &mut HashMap<Port, DevName> { &mut self.devs }
 
     pub fn get_mem_init(&self) -> &MemInit { &self.mem_init }
     pub fn get_mut_mem_init(&mut self) -> &mut MemInit { &mut self.mem_init }
