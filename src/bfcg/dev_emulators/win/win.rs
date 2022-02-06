@@ -117,6 +117,13 @@ impl Win{
         };
     }
 
+    pub fn get_pixel(&mut self, x: u32, y: u32) -> Color {
+        let data = self.data.lock().unwrap();
+        let ptr = 4 * (y * self.width + x) as usize;
+        return Color{ r: data[ptr + 0], g: data[ptr + 1], b: data[ptr + 2], a: data[ptr + 3] }
+    }
+
+
     fn create_raw(data: &Vec<u8>, data_w: u32, data_h: u32) -> glium::texture::RawImage2d<u8> {
         glium::texture::RawImage2d{ 
             data: std::borrow::Cow::Borrowed( data ),

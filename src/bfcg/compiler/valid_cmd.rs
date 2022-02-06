@@ -36,6 +36,7 @@ pub enum ValidCMD{
     IncCoordX, // x++ (with win size overflow)
     IncCoordY, // y++ (with win size overflow)
     SetWinValue, // move cur_cell_value into cur window cell
+    GetWinValue, // move  cur window cell into cur_cell_value
     RedrawWin, // screen redraw
 
     // port cmd:
@@ -93,6 +94,7 @@ impl ValidCMD{
             Self::IncCoordY => '2',
 
             Self::SetWinValue => '5',
+            Self::GetWinValue => '9',
             Self::RedrawWin => '@',
 
             Self::SetCurPort => 's',
@@ -131,6 +133,7 @@ impl ValidCMD{
             '2' => Some(Self::IncCoordY),
 
             '5' => Some(Self::SetWinValue),
+            '9' => Some(Self::GetWinValue),
             '@' => Some(Self::RedrawWin),
 
             's' => Some(Self::SetCurPort),

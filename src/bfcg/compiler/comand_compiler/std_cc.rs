@@ -254,7 +254,6 @@ impl StdCmdCompiler{
 
         let cur_port_reg = 0;
         for x in StdCmdNames::Cur(cur_port_reg).to_u8_seq() { ret.push(x); }
-        for x in StdCmdNames::Set.to_u8_seq() { ret.push(x); }  // TODO:DEL:??? (when windev will - decide)
         for x in RegCmdNames::Zero.to_u8_seq() { ret.push(x); }
 
         self.cancel_pseudo(Some(cur_port_reg));        
@@ -470,11 +469,19 @@ impl StdCmdCompiler {
                 self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
             }
             ValidCMD::SetWinValue => {
-                self.ctb_set_cur_pr(WIN_PR);
                 self.ctb_load_cur_cem(); // {*2}
 
+                self.ctb_set_cur_pr(WIN_PR);
                 self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
                 self.ctb_to(StdCmdNames::Write);
+            }
+            ValidCMD::GetWinValue => {
+                self.ctb_unload_cur_cem(); 
+
+                self.ctb_set_cur_pr(WIN_PR);
+                self.ctb_const_write(WinDevStartAction::from_valid_cmd(&valid_cmd) as u8);
+                self.ctb_to(StdCmdNames::Read);
+                self.set_cem_cur_cell_in_reg(true);
             }
             // #############################################################
             ValidCMD::PrintValue => {
