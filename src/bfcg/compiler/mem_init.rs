@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 //MemInitMergeError
+// MMC : MAIN MEMORY CELL
 
 #[derive(Debug)]
 pub struct MemInit{

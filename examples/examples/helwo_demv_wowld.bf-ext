@@ -1,0 +1,58 @@
+;; this example write in std-out "helwo demvice wowld?".
+;; the output phrase is a slurred phrase "hello device world!"
+
+;; ASCII seq: 104 101 108 119 111 32 100 101 109 118 105 99 101 32 119 111 119 108 100 63
+
+'dis-all-dev'                      ; disconnect all devices
+'port-name:console:4'                   ; TODO:DEL (auto console)
+'dev[console]:ascii-console'       ; connect console that out cell value in decimal form
+
+; all spaces ignored:
+; # macro-name # macro-seq # - macro definition
+; % macro-name % - macro use 
+
+# from-space-to-? # *- #
+# 100 #z+*+***+***#
+# +4 # ++++ #
+# -3 # --- #
+# 0b111 # +*+*+ #
+# >> 4 # //// #
+# << 2 # **   #
+# << 4 # %<<2% %<<2% #
+# 32 # z+%<< 4%* #
+
+%100% %+4% .        ; 104        'h'
+%-3% .              ; 101        'e'
+- %+4% %+4% .       ; 108        'l'
+>                   ; CEM[1]:
+%0b111%**%0b111% .  ; 119        'w'
+>                   ; CEM[2]:
+%0b111%%<<4%- .     ; 111        'o'
+>                   ; CEM[3]:
+%32% .              ; 32         ' '
+<<<                 ; CEM[0]:
+%>>4% %<<2%+%<<2%.  ; 100        'd'
++.                  ; 101        'e'
+>>                  ; CEM[2]
+-- .                ; 109        'm'
+<                   ; CEM[1]:
+-.                  ; 118        'v'
+<                   ; CEM[0]:
+%+4%.               ; 105        'i'
+%-3% %-3% .         ; 99         'c'
+++.                 ; 101        'e'
+>>>                 ; CEM[3]:
+.                   ; 32         ' '
+<<                  ; CEM[1]:
++.                  ; 119        'w'
+>                   ; CEM[2]:
+++.                 ; 111        'o'
+<                   ; CEM[1]:
+.                   ; 119        'w'
+>                   ; CEM[2]:
+---.                ; 108        'l'
+<<                  ; CEM[0]:
+-.                  ; 100        'd'
+>>>                 ; CEM[3]:
+%from-space-to-?%.  ; 63         '?'
+

@@ -62,6 +62,9 @@ impl Setting{
                 }
             } else {
                 if c == Self::CLOSE { 
+                    if cur_add_param.is_empty() { return Err(ErrorSettingHelper::EmptyParam) }
+                    additional.push(cur_add_param);
+                    cur_add_param = String::new();
                     closed = true;
                     continue  
                 } else if c == Self::OPEN {
@@ -119,3 +122,23 @@ impl ToString for Setting{
         return ret
     }
 }
+
+
+// -------------------------------------------------------
+// [+] TO STRING:
+impl ToString for ErrorSettingHelper {
+    fn to_string(&self) -> String {
+        match self {
+            Self::ClosedBeforeOpen => String::from("additional parameter closed before open"),
+            Self::TwiceAdditional => String::from("twiced additional parameter"),
+            Self::EmptyParam => String::from("empty parameter"),
+            Self::CharAfterAdditional => String::from("character after additional"),
+        }
+    }
+}
+
+impl ToString for ErrorSetting {
+    fn to_string(&self) -> String { format!("in parameter \"{}\": error {}", self.param, self.error.to_string()) }
+}
+// [-] TO STRING
+// -------------------------------------------------------

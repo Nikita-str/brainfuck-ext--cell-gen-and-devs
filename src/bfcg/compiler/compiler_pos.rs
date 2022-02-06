@@ -36,3 +36,15 @@ pub struct ExtCompilerPos{
     pub pos: Option<CompilerPos>,
     pub file_name: String,
 }
+
+
+impl ToString for CompilerPos {
+    fn to_string(&self) -> String { format!("[line: {}  symb: {}]", self.line, self.symb) }
+} 
+
+impl ToString for ExtCompilerPos {
+    fn to_string(&self) -> String { 
+        if let Some(x) = &self.pos { format!("<in file: {} at position: {}>",self.file_name, x.to_string()) }
+        else { format!("<in file: {} at unknown position>", self.file_name) }
+    }
+}

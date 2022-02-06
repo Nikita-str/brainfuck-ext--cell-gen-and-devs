@@ -14,6 +14,16 @@ pub enum DevCtorErr {
     Other(String),
 }
 
+impl ToString for DevCtorErr {
+    fn to_string(&self) -> String {
+        match self {
+            Self::UnknownName(x) => format!("unknown name \"{}\"", x), 
+            Self::BadParamValue{name, bad_value} => format!("for parameter {} value {} is inappropriate", name, bad_value),
+            Self::Other(x) => x.to_owned(),
+        }
+    }
+}
+
 pub enum DevCtorWarn {
     UnusedDevParam(String),
     Other(String),

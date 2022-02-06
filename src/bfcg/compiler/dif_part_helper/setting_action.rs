@@ -45,7 +45,7 @@ impl<T> SettingActions<T> {
             let dev_name = &setting.params[1].param;
             if !right_std_dev_name(dev_name) { return SAR::new_error_s("bad device name: ".to_owned() + dev_name) }
 
-            let is_dev_num = dev_param[0].len() > 0 && dev_param[0].chars().all(|c|c.is_ascii_digit()); 
+            let is_dev_num = dev_param.len() > 0 && dev_param[0].chars().all(|c|c.is_ascii_digit()); 
 
             let port = 
                 if dev_param.len() == 0 { Port::new_any() }

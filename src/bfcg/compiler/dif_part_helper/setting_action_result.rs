@@ -1,3 +1,5 @@
+use crate::bfcg::general::PAD;
+
 
 
 pub enum SettingActionResultType{
@@ -105,3 +107,28 @@ impl SettingActionResult{
     pub fn add_warning(&mut self, warning: String) { self.result_type.add_warning_s(warning) }
     pub fn add_warning_by_ref(&mut self, warning: &str) { self.result_type.add_warning(warning) }
 }
+
+
+// -------------------------------------------------------
+// [+] TO STRING:
+impl ToString for SettingActionResultType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Ok => String::from("[OK]"),
+            Self::NoSatisfy => String::from("[no one satisfy]"),
+            Self::OkWithWarnings{ warning } => {
+                let mut ret = String::from("[OK with warn]:"); 
+                for x in warning {
+                    ret += "\n";
+                    ret += PAD;
+                    ret += x;
+                }
+                ret
+            }
+            Self::Error{ error } => { format!("[ERROR]: {}", error)
+            }
+        }
+    }
+}
+// [-] TO STRING
+// -------------------------------------------------------
