@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-use super::dev::Dev;
+use super::{dev::Dev, win::win::SpecialWin};
 
 
 // TODO: string name ---> Dev 
 
 
-
+//------------------------------------------------------------------------
+// [+] ERR, WARN, OK
 
 pub enum DevCtorErr {
     UnknownName(String),
@@ -29,9 +30,6 @@ pub enum DevCtorWarn {
     Other(String),
 }
 
-pub trait DevCtor {
-    fn dev_ctor(dev_name_params: &HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr>;
-}
 
 pub struct DevCtorOk{
     pub dev: Box<dyn Dev>,
@@ -41,6 +39,22 @@ pub struct DevCtorOk{
 impl DevCtorOk{
     pub fn new(dev: Box<dyn Dev>, warns:Vec<DevCtorWarn>) -> Self { Self { dev, warns } }
 }
+
+// [-] ERR, WARN, OK
+//------------------------------------------------------------------------
+
+//------------------------------------------------------------------------
+// [+] TRAIT
+pub trait DevCtor {
+    fn dev_ctor(dev_name_params: &HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr>;
+}
+
+pub trait DevWinCtor {
+    fn dev_win_ctor(win: &mut SpecialWin, dev_name_params: &HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr>;
+}
+
+// [-] TRAIT
+//------------------------------------------------------------------------
 
 //------------------------------------------------------------------------
 // [+] HELPER:

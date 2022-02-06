@@ -11,6 +11,7 @@ use glutin::ContextBuilder;
 
 pub struct Win{
     need_redraw: Arc<AtomicBool>,
+    need_exit: Arc<AtomicBool>,
     data: Arc<Mutex<Vec<u8>>>,
     width: u32,
     height: u32,
@@ -35,6 +36,7 @@ impl std::clone::Clone for Win{
     fn clone(&self) -> Self {
         Self { 
             need_redraw: Arc::clone(&self.need_redraw), 
+            need_exit: Arc::clone(&self.need_exit),
             data: Arc::clone(&self.data), 
             width: self.width, 
             height: self.height, 
@@ -76,14 +78,25 @@ impl Win{
         
         let drawer = self.get_mut_drawer();    
         let event = Event::RedrawRequested(drawer.id);
-        if drawer.proxy.send_event(event).is_err() {
-            false
-        } else {
-            true
-        } 
+        
+        drawer.proxy.send_event(event).is_ok()
     }
 
-    pub fn clear_color(&mut self, color: Color){
+    pub fn win_exit(&mut self) -> bool {
+        if !self.with_drawer() { return false }
+
+        self.need_exit.store(true, Ordering::Relaxed); 
+        
+        let drawer = self.get_mut_drawer();    
+        let event = Event::LoopDestroyed; 
+        //let event = Event::WindowEvent{ window_id: drawer.id, event: WindowEvent::CloseRequested };
+        
+        drawer.proxy.send_event(event).is_ok()
+    }
+
+    #[allow(unused)]
+    pub(in super) 
+    fn clear_color(&mut self, color: Color){
         // for test only
 
         if !self.can_thread_draw() {
@@ -101,7 +114,10 @@ impl Win{
         }
     }
 
-    pub fn set_pixel(&mut self, x: u32, y: u32, color: Color){
+    #[allow(unused)]
+    /// slow function, use buffer instead
+    pub(in super) 
+    fn set_pixel(&mut self, x: u32, y: u32, color: Color){
         let mut data = self.data.lock().unwrap();
         let ptr = 4 * (y * self.width + x) as usize;
         if color.a == 0 { 
@@ -117,12 +133,24 @@ impl Win{
         };
     }
 
-    pub fn get_pixel(&mut self, x: u32, y: u32) -> Color {
+    #[allow(unused)]
+    /// slow function, use buffer instead
+    pub(in super) 
+    fn get_pixel(&mut self, x: u32, y: u32) -> Color {
         let data = self.data.lock().unwrap();
         let ptr = 4 * (y * self.width + x) as usize;
         return Color{ r: data[ptr + 0], g: data[ptr + 1], b: data[ptr + 2], a: data[ptr + 3] }
     }
 
+    pub(in super) 
+    fn draw_from_buffer(&mut self, buffer: &Vec<u8>) {
+        let mut data = self.data.lock().unwrap();
+        assert_eq!(data.len(), buffer.len());
+        for (ptr, x) in buffer.iter().enumerate() { 
+            let z = if ptr % 4 == 3 { if *x == 0 { 0 } else { 0xFF } } else { *x };
+            data[ptr] = z 
+        }
+    } 
 
     fn create_raw(data: &Vec<u8>, data_w: u32, data_h: u32) -> glium::texture::RawImage2d<u8> {
         glium::texture::RawImage2d{ 
@@ -209,9 +237,9 @@ impl Win{
         self.data = Arc::new(Mutex::new(data));
     }
 
-    pub fn new(width: u32, height: u32) { Self::new_all(width, height, Self::STD_START_POS) }
+    pub fn new(width: u32, height: u32) -> SpecialWin { Self::new_all(width, height, Self::STD_START_POS) }
 
-    pub fn new_all(width: u32, height: u32, pos: (u32, u32)) {
+    pub fn new_all(width: u32, height: u32, pos: (u32, u32)) -> SpecialWin {
         let width = width + Self::BORDER_2SZ;
         let height = height + Self::BORDER_2SZ;
 
@@ -238,6 +266,7 @@ impl Win{
         
         let mut thread_win = Self{
             need_redraw: Arc::new(AtomicBool::new(true)),
+            need_exit: Arc::new(AtomicBool::new(false)),
             data: Arc::new(Mutex::new(vec![])),
             width,
             height,
@@ -252,22 +281,103 @@ impl Win{
         let proxy = event_loop.create_proxy();
         thread_win.drawer = Some(DrawThreadWin{ can_thread_draw: false, id, proxy });
 
+        SpecialWin::private_create(thread_win, inner_win, id, texture, display, event_loop)
+    }
+}
+
+//type ProxyType = EventLoopProxy<Event<'static, ()>>;
+type EventLoopType = EventLoop<Event<'static, ()>>;
+
+// TODO: RENAME!!!
+pub struct SpecialWin{
+    thread_win: Option<Win>,
+    inner_win: Win,
+
+    id: WindowId,
+    
+    texture: glium::Texture2d,
+    display: glium::Display,
+    event_loop: EventLoopType,
+}
+
+impl SpecialWin{
+    fn private_create(
+        thread_win: Win, 
+        inner_win: Win, 
+        id: WindowId, 
+        texture: glium::Texture2d, 
+        display: glium::Display, 
+        event_loop: EventLoopType,
+    ) -> Self{
+        Self {
+            thread_win: Some(thread_win),
+            inner_win,
+            id,
+            texture,
+            display,
+            event_loop,
+        }
+    }
+
+    pub(in super) 
+    fn create_dev_helper(&mut self) -> (Win, Vec<u8>) {
+        let inner = std::mem::take(&mut self.thread_win);
+        if inner.is_none() { panic!("win device already created [ currently can be only one :( ]") }
+        let inner = inner.unwrap();
+        
+        let buffer;
+        {
+            let data = inner.data.lock().unwrap();
+            buffer = Vec::<u8>::clone(&data);
+        }
+
+        (inner, buffer)
+    } 
+
+    pub fn run(self) {
+        let (
+            thread_win, 
+            inner_win, 
+            id,
+            texture,
+            display,
+            event_loop,
+        ) = (self.thread_win, self.inner_win, self.id, self.texture, self.display, self.event_loop);
+
+        if thread_win.is_some() { println!("WARNING: unused WinDev") }
+
+        let exit_bool_helper = Arc::clone(&inner_win.need_exit);
+        let exit_helper = DrawThreadWin{ can_thread_draw: false, id, proxy: event_loop.create_proxy() };
+
         std::thread::spawn(move||{
+            /*
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(2500));
+                std::thread::sleep(std::time::Duration::from_millis(1500));
                 thread_win.start_draw_frame();
                 thread_win.clear_color(Color{r: 0x00, g: 0xFF, b: 0x00, a: 0xFF});
                 thread_win.end_draw_frame();
                 
-                std::thread::sleep(std::time::Duration::from_millis(2500));
+                std::thread::sleep(std::time::Duration::from_millis(1500));
                 thread_win.start_draw_frame();
                 thread_win.clear_color(Color{r: 0xFF, g: 0x00, b: 0x00, a: 0xFF});
                 thread_win.end_draw_frame();
-            }
+
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                break;
+
+            } 
+            */
+            exit_bool_helper.store(true, Ordering::Relaxed); 
+            if exit_helper.proxy.send_event(Event::LoopDestroyed).is_err() { panic!("cant send exit") }
         });
 
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
+
+            if inner_win.need_exit.load(Ordering::Relaxed) {
+                *control_flow = ControlFlow::Exit;
+                return
+            }
 
             if inner_win.need_redraw.load(Ordering::Relaxed) {
                 inner_win.inner_redraw(&texture);
@@ -280,11 +390,17 @@ impl Win{
             }
 
             match event {
-                Event::LoopDestroyed => return,
+                Event::LoopDestroyed => {
+                    *control_flow = ControlFlow::Exit;
+                    return
+                }
                 Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::CloseRequested => {
+                        *control_flow = ControlFlow::Exit;
+                        return
+                    }
                     _ => (),
-                },
+                }
                 Event::RedrawRequested(_) => {
                     inner_win.inner_redraw(&texture);
                     let frame = display.draw();
@@ -296,5 +412,5 @@ impl Win{
                 _ => (),
             }
         });
-    }
+    } 
 }
