@@ -1,5 +1,5 @@
 
-pub trait Dev{
+pub trait Dev: Send{
     // TODO: if need add [mut_]{read_byte, write_byte}
 
     fn read_byte(&mut self) -> u8;

@@ -1,0 +1,79 @@
+;; let draw a similar string "helwo scwreen wowld"
+
+'dis-all-dev'                         ; disconnect all devices
+'port-name:screen:42'                 ; TODO:DEL (auto win)
+'dev[screen]:std-win:w=400:h=200'     ; connect screen aka win aka display 
+
+;; use 4 mem cell, (you can create them and after use delete)
+;; set mem in 34 165 127 0xFF
+;;
+# create-green-seq # 
+    z +****+* $$     ; 34 34 [34] ?
+    --**- $          ; 34 34 127 [127]
+    + <<             ; 34 [34] 127 255
+    ///+***+**+ <    ; [34] 165 127 0xFF
+#
+
+
+# set-pixel # 5>5>5>5 <<< #
+# B+set-pixel # %set-pixel% 6 %set-pixel% 2 %set-pixel% 4 %set-pixel% 8 #
+
+# B+2 # 22 #
+# B+4 # 44 #
+# B+6 # 66 #
+# B+8 # 88 #
+
+;; CEM: 
+;; [len] r g b a  
+# draw-h-line-down # [>%set-pixel%<2-] #
+# B+draw-h-line-down # [>%B+set-pixel%<%B+2%-] #
+
+# draw-h-line-up #   [>%set-pixel%<8-] #
+# B+draw-h-line-up #   [>%B+set-pixel%<%B+8%-] #
+
+;; CEM: we stay 1 cell before start of color-seq RGBA
+;;
+;;   here
+;;    |
+;;    V
+;;    X  X<-- end here
+;;    X  X
+;;    XXXX
+;;    X  X
+;;    X  X
+;;
+#<h># 
+    z+**+ %draw-h-line-down% 8; draw horizontal line len 5
+    666
+    z+**+ %draw-h-line-up% 2
+    224
+    >
+    %set-pixel% 4
+    %set-pixel% 6
+    688
+    <
+#
+
+#<H># 
+    z+**+ %B+draw-h-line-down% %B+8%; draw horizontal line len 5
+    %B+6%%B+6%%B+6%
+    z+**+ %B+draw-h-line-up% %B+2%
+    %B+2%%B+2%%B+4%
+    >
+    %B+set-pixel% %B+4%
+    %B+set-pixel% %B+6%
+    %B+6%%B+8%%B+8%
+    <
+#
+
+; TODO:   + [c>%create-green-seq%< %<h>% @ d]
+
++>>%create-green-seq%<< 
+[> 
+%B+2%%B+2%
+%B+6%%B+6%
+%<H>% 
+@ 
+<]
+
+;->>%create-green-seq%<<  [>>%B+set-pixel% %B+6% %B+set-pixel% %B+2% %B+4% %B+set-pixel% %B+6%<<-] @

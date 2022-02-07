@@ -198,3 +198,8 @@ fn compiler_test_u8_helwo_wowld() {
     println!("-----------------------");
     println!("[-] RUN");
 }
+
+
+// WIN example can't run from not main thread, but in test used not main thread => can't run win-example as test
+// so check example_run.rs
+

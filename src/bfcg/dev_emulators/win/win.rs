@@ -143,13 +143,27 @@ impl Win{
     }
 
     pub(in super) 
-    fn draw_from_buffer(&mut self, buffer: &Vec<u8>) {
+    fn draw_from_buffer(&mut self, buffer: &Vec<u8>, width: usize, height: usize) {
         let mut data = self.data.lock().unwrap();
         assert_eq!(data.len(), buffer.len());
+
+        let mut ptr = 0;
+        for y in (0..height).rev() {
+            let mut data_ptr = y * (width * 4);
+            for _ in 0..(width * 4) {
+                let z = buffer[ptr]; 
+                let z = if ptr % 4 == 3 { if z == 0 { 0 } else { 0xFF } } else { z };
+                data[data_ptr] = z;
+                ptr += 1;
+                data_ptr += 1;
+            }
+        }
+        /*
         for (ptr, x) in buffer.iter().enumerate() { 
             let z = if ptr % 4 == 3 { if *x == 0 { 0 } else { 0xFF } } else { *x };
             data[ptr] = z 
         }
+        */
     } 
 
     fn create_raw(data: &Vec<u8>, data_w: u32, data_h: u32) -> glium::texture::RawImage2d<u8> {
@@ -334,7 +348,9 @@ impl SpecialWin{
         (inner, buffer)
     } 
 
-    pub fn run(self) {
+    const SLEEP_MS_BEFORE_CLOSE: u64 = 5_000;
+
+    pub fn run<F: FnMut() -> () + Send + 'static>(self, mut run_f: F) {
         let (
             thread_win, 
             inner_win, 
@@ -367,6 +383,9 @@ impl SpecialWin{
 
             } 
             */
+            (run_f)();
+            
+            std::thread::sleep(std::time::Duration::from_millis(Self::SLEEP_MS_BEFORE_CLOSE));
             exit_bool_helper.store(true, Ordering::Relaxed); 
             if exit_helper.proxy.send_event(Event::LoopDestroyed).is_err() { panic!("cant send exit") }
         });

@@ -27,6 +27,9 @@ const PIXEL_BYTE: usize = 4; // RGBA
 impl DevWin { 
     pub fn new(win: &mut SpecialWin) -> Self { 
         let (inner, buffer) = win.create_dev_helper();
+        
+        println!("TODO:DEL: buf.len = {}", buffer.len());
+
         Self {
             inner,
             buffer,
@@ -45,14 +48,22 @@ impl DevWin {
     fn width(&self) -> usize { self.inner.get_width() as usize }
     fn height(&self) -> usize { self.inner.get_height() as usize }
 
-    fn inc_x(&mut self) { self.pos_x = (self.pos_x + 1) % self.width() }
-    fn inc_y(&mut self) { self.pos_y = (self.pos_y + 1) % self.height() }
+    fn inc_x(&mut self) { 
+        self.pos_pixel = 0;
+        self.pos_x = (self.pos_x + 1) % self.width() 
+    }
+    fn inc_y(&mut self) { 
+        self.pos_pixel = 0;
+        self.pos_y = (self.pos_y + 1) % self.height() 
+    }
 
     fn dec_x(&mut self) { 
+        self.pos_pixel = 0;
         if self.pos_x == 0 { self.pos_x = self.width() - 1 } 
         else { self.pos_x -= 1 }
     }
     fn dec_y(&mut self) { 
+        self.pos_pixel = 0;
         if self.pos_y == 0 { self.pos_y = self.height() - 1 } 
         else { self.pos_y -= 1 }
     }
@@ -62,7 +73,7 @@ impl DevWin {
         self.pos_y = 0;
         self.pos_pixel = 0;
      }
-    fn get_buffer_pos(&self) -> usize { self.pos_pixel + self.pos_x + self.width() * self.pos_y }
+    fn get_buffer_pos(&self) -> usize { self.pos_pixel + PIXEL_BYTE * self.pos_x + (PIXEL_BYTE * self.width()) * self.pos_y }
 
     fn set_byte(&mut self, byte: u8) { 
         let buffer_pos = self.get_buffer_pos();
@@ -70,7 +81,7 @@ impl DevWin {
     }
     fn get_byte(&mut self) -> u8 { self.buffer[self.get_buffer_pos()] }
 
-    fn next_pixel_pos(&mut self) { self.pos_pixel %= PIXEL_BYTE; }
+    fn next_pixel_pos(&mut self) { self.pos_pixel = (self.pos_pixel + 1) % PIXEL_BYTE; }
 }
 
 
@@ -106,6 +117,7 @@ impl Dev for DevWin {
             }
         }
 
+
         match byte {
             x if x == WinDevStartAction::DecCoordX as u8 => { self.dec_x() }
             x if x == WinDevStartAction::DecCoordY as u8 => { self.dec_y() }
@@ -114,7 +126,7 @@ impl Dev for DevWin {
 
             x if x == WinDevStartAction::RedrawWin as u8 => { 
                 if !self.inner.start_draw_frame() { self.error = true; return }
-                self.inner.draw_from_buffer(&self.buffer);
+                self.inner.draw_from_buffer(&self.buffer, self.width(), self.height());
                 if !self.inner.end_draw_frame() { self.error = true; return }
                 self.clear_pos();
             }

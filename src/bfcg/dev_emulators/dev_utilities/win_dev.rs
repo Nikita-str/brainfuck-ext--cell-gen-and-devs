@@ -2,6 +2,7 @@ use crate::bfcg::compiler::valid_cmd::ValidCMD;
 
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum WinDevStartAction {
     DecCoordX = 4, // num pad ←
     DecCoordY = 8, // num pad ↑

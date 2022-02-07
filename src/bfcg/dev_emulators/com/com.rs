@@ -130,11 +130,9 @@ impl Dev for DevCom {
 
             match act {
                 CmdMemDevStartAction::JumpForward => {
-                    println!("TODO:DEL: JMP-->; len = {}", jmp_len_forward);
                     if byte == 0 { self.inner.jump_forward(jmp_len_forward) }
                 }
                 CmdMemDevStartAction::JumpBackward => {
-                        println!("TODO:DEL: <--JMP; len = {}", jmp_len_backward);
                     if byte != 0 { self.inner.jump_backward(jmp_len_backward) }
                 }
             }
