@@ -51,9 +51,9 @@ pub fn compiler_test_u8_exmp_02() {
 
     let ok = result.ok().unwrap();
 
-    /* 
     let mut file = std::fs::File::create("target/tmp/02_write_const_str_in_win.bin").ok().unwrap();
     if file.write_all(ok.get_ref_program()).is_err() { panic!("cant write in file") };
+    /* 
     
     let mut disasm_info = StdDisasmInfo::new();
     disasm_info.std_init();
@@ -105,7 +105,7 @@ pub fn compiler_test_u8_exmp_02() {
 
     }
 
-    let mut com = Box::new(DevStdCom::new(0x10_00));    
+    let mut com = Box::new(DevStdCom::new(0x10_00_00));    
     com.init(ok.get_ref_program().iter());
     com.move_to_start();
 
@@ -133,7 +133,7 @@ pub fn compiler_test_u8_exmp_02() {
         let z = processor.run();
         if let ProcessorRunResult::Ok = z { }
         else { println!("{}", z.to_string()); panic!() }
-        println!("-----------------------");
+        println!("\n-----------------------");
         println!("[-] RUN");
     };
 

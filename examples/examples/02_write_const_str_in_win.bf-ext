@@ -1,8 +1,9 @@
-;; let draw a similar string "helwo scwreen wowld"
+;; let draw a similar string "hello screen world"
 
 'dis-all-dev'                         ; disconnect all devices
 'port-name:screen:42'                 ; TODO:DEL (auto win)
 'dev[screen]:std-win:w=400:h=200'     ; connect screen aka win aka display 
+
 
 ;; use 4 mem cell, (you can create them and after use delete)
 ;; set mem in 34 165 127 0xFF
@@ -10,8 +11,19 @@
 # create-green-seq # 
     z +****+* $$     ; 34 34 [34] ?
     --**- $          ; 34 34 127 [127]
-    + <<             ; 34 [34] 127 255
+    *+ <<            ; 34 [34] 127 255
     ///+***+**+ <    ; [34] 165 127 0xFF
+#
+
+;; NEED POSSIBILITY TO CELL CREATON !
+;; use 4 mem cell, (you can create them and after use delete)
+;; set mem in 153 102 204 0xFF
+;;
+# create-ame-seq # 
+    z c++ [< *+***+ >-] d >    ; 153 [?] ? ?           ; just c d use; this line eq: z +***+*+***+ > 
+    z +*+***+*+* $             ; 153 102 [102] ?
+    * >                        ; 153 102 204 [?]
+    z - <<<                    ; [153] 102 102 0xFF
 #
 
 
@@ -25,11 +37,25 @@
 
 ;; CEM: 
 ;; [len] r g b a  
-# draw-h-line-down # [>%set-pixel%<2-] #
-# B+draw-h-line-down # [>%B+set-pixel%<%B+2%-] #
+# draw-v-line-down # [>%set-pixel%<2-] #
+# B+draw-v-line-down # [>%B+set-pixel%<%B+2%-] #
 
-# draw-h-line-up #   [>%set-pixel%<8-] #
-# B+draw-h-line-up #   [>%B+set-pixel%<%B+8%-] #
+# draw-v-line-up #   [>%set-pixel%<8-] #
+# B+draw-v-line-up #   [>%B+set-pixel%<%B+8%-] #
+
+
+# draw-h-line-6 # [>%set-pixel%<6-] #
+# B+draw-h-line-6 # [>%B+set-pixel%<%B+6%-] #
+# draw-h-line-4 # [>%set-pixel%<4-] #
+# B+draw-h-line-4 # [>%B+set-pixel%<%B+4%-] #
+
+# next-symb # 66 #
+# B+next-symb # %B+6%%B+6% #
+# next-line # 22 #
+# B+next-line # %B+2%%B+2% #
+
+#from-bottom-symb-pix-to-top # z+** [8-] #
+#B+from-bottom-symb-pix-to-top # z+** [%B+8%-]#
 
 ;; CEM: we stay 1 cell before start of color-seq RGBA
 ;;
@@ -43,9 +69,9 @@
 ;;    X  X
 ;;
 #<h># 
-    z+**+ %draw-h-line-down% 8; draw horizontal line len 5
+    z+**+ %draw-v-line-down% 8; draw vertical line len 5
     666
-    z+**+ %draw-h-line-up% 2
+    z+**+ %draw-v-line-up% 2
     224
     >
     %set-pixel% 4
@@ -55,9 +81,9 @@
 #
 
 #<H># 
-    z+**+ %B+draw-h-line-down% %B+8%; draw horizontal line len 5
+    z+**+ %B+draw-v-line-down% %B+8%; draw vertical line len 5
     %B+6%%B+6%%B+6%
-    z+**+ %B+draw-h-line-up% %B+2%
+    z+**+ %B+draw-v-line-up% %B+2%
     %B+2%%B+2%%B+4%
     >
     %B+set-pixel% %B+4%
@@ -66,14 +92,189 @@
     <
 #
 
-; TODO:   + [c>%create-green-seq%< %<h>% @ d]
+#<e>#
+    z+**+ %draw-v-line-down% 8
+    z+**  %draw-h-line-6% 4
+    488
+    z+*+ %draw-h-line-4% 6
+    88
+    z+**  %draw-h-line-6% 4
+#
 
-+>>%create-green-seq%<< 
-[> 
-%B+2%%B+2%
-%B+6%%B+6%
-%<H>% 
-@ 
-<]
+#<E>#
+    z+**+ %B+draw-v-line-down% %B+8%
+    z+**  %B+draw-h-line-6% %B+4%
+    %B+4%%B+8%%B+8%
+    z+*+ %B+draw-h-line-4% %B+6%
+    %B+8%%B+8%
+    z+**  %B+draw-h-line-6% %B+4%
+#
+
+#<l>#
+    z+**+ %draw-v-line-down% 8
+    z+*+  %draw-h-line-6% 4
+    % from-bottom-symb-pix-to-top %
+#
+# <L-small> # %<l>% #
+
+#<L>#
+    z+**+ %B+draw-v-line-down% %B+8%
+    z+*+  %B+draw-h-line-6% %B+4%
+    % B+from-bottom-symb-pix-to-top %
+#
+
+#<W>#
+    z+** %B+draw-v-line-down% 
+    %B+6% 
+    > 
+        %B+set-pixel% %B+6%%B+8%
+        %B+set-pixel% %B+8%
+        %B+set-pixel% %B+2%%B+2%%B+6%
+        %B+set-pixel% %B+6%%B+8%
+    <
+    z+** %B+draw-v-line-up% %B+2%
+#
+
+#<O>#
+    %B+2%
+    z+*+ %B+draw-v-line-down% 
+    ++ [>%B+6% %B+set-pixel% <-]
+    %B+6% %B+8%
+    z+*+ %B+draw-v-line-up%
+    ++ [>%B+4% %B+set-pixel% <-]
+    %B+6% %B+6%
+#
+
+#<SPACE># z+* [%B+6%-] #
+
+#<S>#
+    %B+2% >%B+set-pixel%<
+    z+++ [%B+2%-]
+    +++ %B+draw-h-line-6%
+    %B+8% >%B+set-pixel%< %B+8%
+    ++ [>%B+4% %B+set-pixel% <-]
+    %B+8% %B+8%
+    +++ %B+draw-h-line-6%
+    %B+4%
+#
+
+#<C>#
+    %B+2%
+    z+*+ %B+draw-v-line-down% 
+    %B+6%
+    +*+ %B+draw-h-line-6%
+    %B+4%
+    % B+from-bottom-symb-pix-to-top %
+    +*+ %B+draw-h-line-4%
+    +*+ [%B+6%-]
+#
+
+#<D>#
+    z+**+ %B+draw-v-line-down% %B+8%
+    +*+ %B+draw-h-line-6%
+    %B+8%
+    +*+ %B+draw-v-line-up%
+    %B+4%
+    +* %B+draw-h-line-4%
+    +++ [%B+6%-]
+#
+
+#<R>#
+    z+**+ %B+draw-v-line-down% %B+8%
+    +** [%B+6%-]
+    >%B+set-pixel%<
+    ++ [%B+8% %B+4% >%B+set-pixel%<-]
+    %B+4% >%B+set-pixel%<
+    %B+8% %B+8%
+    +++ %B+draw-h-line-6%
+    %B+4% %B+2% >%B+set-pixel%<
+    %B+8% %B+6%
+#
+
+
+#<N>#
+    z+**+ %B+draw-v-line-down% %B+8%
+    +*+ [%B+8%-] %B+6% >%B+set-pixel%<
+    %B+6% %B+2% >%B+set-pixel%<
+    %B+2% %B+2% %B+6%
+    +**+ %B+draw-v-line-up% %B+2%
+#
+
+
++ 
+> %create-green-seq% <
+>>>>>
+++
+> %create-ame-seq% <
+
+;; move left while x != 0x01
+c <$-z [d<  c <$-z] d
+
+[
+    c
+    %B+2%%B+2%
+    %B+6%%B+6%
+    %<H>%
+    %B+next-symb%
+    %<E>% 
+    %B+next-symb%
+    %<L>% 
+    %B+next-symb%
+    %<L>% 
+    %B+next-symb%
+    %<O>% 
+    %B+next-symb%
+    
+    %<SPACE>%
+
+    %B+next-symb%
+    %<S>%
+    %B+next-symb%
+    %<C>%
+    %B+next-symb%
+    %<R>%
+    %B+next-symb%
+    %<E>% 
+    %B+next-symb%
+    %<E>% 
+    %B+next-symb%
+    %<N>% 
+    %B+next-symb%
+
+    %<SPACE>%
+
+    %B+next-symb%
+    %<W>% 
+    %B+next-symb%
+    %<O>% 
+    %B+next-symb%
+    %<R>% 
+    %B+next-symb%
+    %<L>% 
+    %B+next-symb%
+    %<D>% 
+    %B+next-symb% 
+    @ 
+    d
+
+    ;; if 0x01 => CEM: +5
+    ;; else    => CEM: -5
+    ;;
+    c<$ -z c<$ 
+    [dd <<<<< c+c]
+    d -
+    [d >>>>> c]
+    d
+
+    ;; in 03 here we call timer! for not wery often redraw
+]
+
+;+>>%create-green-seq%<< 
+;[> 
+;%B+2%%B+2%
+;%B+6%%B+6%
+;%<H>% 
+;@ 
+;<]
 
 ;->>%create-green-seq%<<  [>>%B+set-pixel% %B+6% %B+set-pixel% %B+2% %B+4% %B+set-pixel% %B+6%<<-] @

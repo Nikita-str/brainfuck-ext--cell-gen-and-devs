@@ -117,7 +117,7 @@ impl Dev for DevStdCem {
             }
 
             // DELETE
-            x if self.write_byte_cond(x, CellMemDevStartAction::CreateCell) => {
+            x if self.write_byte_cond(x, CellMemDevStartAction::DeleteCell) => {
                 self.cem_inner.delete_cell();
             }
 

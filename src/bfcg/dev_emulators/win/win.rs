@@ -348,7 +348,7 @@ impl SpecialWin{
         (inner, buffer)
     } 
 
-    const SLEEP_MS_BEFORE_CLOSE: u64 = 5_000;
+    const SLEEP_MS_BEFORE_CLOSE: u64 = 2_500;
 
     pub fn run<F: FnMut() -> () + Send + 'static>(self, mut run_f: F) {
         let (
