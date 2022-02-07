@@ -33,9 +33,12 @@ impl<T> CompilerInfo<T>{
             macros: HashMap::new(),
             warnings: CompilerWarnings::new(),
             settings_for_parent: vec![],
-            inter_info: if let Some(inter_info) = inter_info { inter_info } else { CompilerInterInfo::new() },
+            inter_info: if let Some(inter_info) = inter_info { inter_info } else { CompilerInterInfo::new( None ) },
         }
     }
+
+    pub fn take_path(&mut self) -> Option<std::path::PathBuf> { self.inter_info.take_path() }
+    pub fn set_path(&mut self, path: std::path::PathBuf) { self.inter_info.set_path(path) }
 
     pub fn get_inter_info(&self) -> &CompilerInterInfo { &self.inter_info }
     pub fn get_mut_inter_info(&mut self) -> &mut CompilerInterInfo { &mut self.inter_info }

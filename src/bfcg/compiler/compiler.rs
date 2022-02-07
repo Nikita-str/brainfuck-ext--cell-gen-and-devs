@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::str::Chars;
 
 use crate::bfcg::compiler::dif_part_helper::settings::Setting;
@@ -261,19 +262,65 @@ macro_rules! compile_mem_init_if_need {
 }
 
 // ---------------------------------------------------------------------
+// [+] PATH HELP FN:
+
+/// #result
+/// if can not open => None; 
+/// else => Some(code)
+fn open_file(mut cur_path: Option<PathBuf>, file_name: &String) -> Option<(PathBuf, String)> {
+    let mut new_path = Path::new(file_name).to_path_buf();
+    
+    if let Some(ext) = new_path.extension() { if ext != "bf-ext" { return None } } 
+    else { new_path.set_extension("bf-ext"); }
+
+    cur_path =
+    if let Some(cur_path) = &cur_path {
+        let mut new_cur_path = cur_path.parent().unwrap(); 
+
+        let mut temp_new_path = new_path.as_path();
+        while temp_new_path.starts_with("..") {
+            if let Ok(new_path_postfix) = temp_new_path.strip_prefix("../") {
+                temp_new_path = new_path_postfix;
+                if let Some(x) = new_cur_path.parent() { new_cur_path = x }
+                else { return None }
+            } else { return None }
+        }
+        
+        Some(new_cur_path.join(temp_new_path))
+    }  else {
+        Some(new_path)
+    };
+
+    println!("TODO:DEL: [#2] {:?}", cur_path);
+
+    let cur_path = cur_path.unwrap();
+    let file_as_string = std::fs::read_to_string(&cur_path);
+    if let Ok(code) = file_as_string { return Some((cur_path, code)) }
+    else { return None } 
+}
+// [-] PATH HELP FN
+// ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
 // COMPILER + PARSER: 
 
 pub fn compile<CC, T>(file_name: String, mut option: CompilerOption<CC, T>, inter_info: Option<CompilerInterInfo>) 
 -> Result<CompilerInfo<T>, CompilerError>
 where CC: CmdCompiler<T> + PortNameHandler,
 {
-    // TODO: file path
-    let file_as_string = std::fs::read_to_string(&file_name);
-    if file_as_string.is_err() { return Err(CompilerError::new_file_open_err(file_name)) }
-    let file_as_string = file_as_string.unwrap();
-    let chars = file_as_string.chars();
-
     let mut ret = CompilerInfo::new(inter_info);
+
+    let code = 
+    {
+        let x = open_file(ret.take_path(), &file_name);
+        if let Some((path, code)) = x {
+            ret.set_path(path);
+            code
+        }
+        else { return Err(CompilerError::new_file_open_err(file_name)) }
+    };
+    let chars = code.chars();
+
     let mut param = InnerCompilerParam::new(chars);
 
     if option.need_processed_default_settings() {

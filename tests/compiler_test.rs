@@ -203,3 +203,83 @@ fn compiler_test_u8_helwo_wowld() {
 // WIN example can't run from not main thread, but in test used not main thread => can't run win-example as test
 // so check example_run.rs
 
+
+#[test]
+fn compiler_test_u8_sugar_mul() {
+    let path = "examples/proof_of_sugarity_some_cmds/proof_mul.bf-ext";
+
+    let mem_init_type = MemInitType::BeforeCode;
+    let mut set_act = SettingActions::new();
+    SettingActions::add_std_actions(&mut set_act, mem_init_type);
+
+    let empty_mnc_holder_checker = HolderChekerMNC::new();
+    let hardware_info = HardwareInfo{ max_port_amount: 64, max_jump_size: 1 << 16, default_cem_port: 1, default_com_port: 2, };
+
+    let option = CompilerOption::new(
+        mem_init_type,
+        comand_compiler::StdCmdCompiler::new(&hardware_info),
+        &set_act,
+        vec![],
+        &empty_mnc_holder_checker,
+    );
+
+    let result = compiler::compile(path.to_owned(), option, None);
+    if let Err(x) = result {
+        println!("{}\n\n", x.to_string()); 
+        panic!("must be ok"); 
+    } 
+    println!("\n");
+
+    let ok = result.ok().unwrap();
+
+    let mut processor = StdProcessor::new(
+        hardware_info.max_port_amount, 
+        hardware_info.default_com_port, 
+        hardware_info.default_cem_port
+    );
+
+    for (port, dev_name) in ok.get_devs() {
+        let x = std_dev_constructor(dev_name);
+        if x.is_err() { panic!("Device Constructor Error: {}", x.err().unwrap().to_string()) }
+        let dev = x.ok().unwrap();
+        if !dev.warns.is_empty() { panic!("not empty warns") }
+        
+        let port_num = match port {
+            Port::Number(x) => *x,
+            Port::Name(x) =>  ok.get_port(x).unwrap(),
+            _ => { 
+                println!("PANIC AT DEV: {:?}", dev_name.get_name());
+                println!("PANIC AT PORT: {:?}", port);
+                panic!("no now") 
+            }
+        };
+
+        let x = processor.add_device_boxed(dev.dev, port_num);
+        if let Err(_) = x { panic!("must be ok") }
+        if let AddDeviceOk::OldDevDisconected = x.ok().unwrap() { panic!("must be ::Ok") }
+
+    }
+
+
+    let mut com = Box::new(DevStdCom::new(0x10_00));    
+    com.init(ok.get_ref_program().iter());
+    com.move_to_start();
+
+    let cem = Box::new(DevStdCem::new(0x10_00, 0x10_00));
+
+    let x = processor.add_device_boxed(com, hardware_info.default_com_port);
+    if let Err(_) = x { panic!("must be ok") }
+    if let AddDeviceOk::OldDevDisconected = x.ok().unwrap() { panic!("must be ::Ok") }
+
+    let x = processor.add_device_boxed(cem, hardware_info.default_cem_port);
+    if let Err(_) = x { panic!("must be ok") }
+    if let AddDeviceOk::OldDevDisconected = x.ok().unwrap() { panic!("must be ::Ok") }
+
+    println!("[+] RUN");
+    println!("-----------------------");
+    let z = processor.run();
+    if let ProcessorRunResult::Ok = z { }
+    else { println!("{}", z.to_string()); panic!() }
+    println!("\n-----------------------");
+    println!("[-] RUN");
+}
