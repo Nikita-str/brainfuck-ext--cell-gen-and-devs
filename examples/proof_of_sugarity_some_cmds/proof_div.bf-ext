@@ -1,6 +1,6 @@
 
 ##std_proof_macros#
-##proof_test_zero#
+#'#proof_test_zero#
 
 'dis-all-dev'                ; disconnect all devices
 'dev[console]:num-console'   ; connect console that out cell value in decimal form

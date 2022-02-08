@@ -51,6 +51,7 @@ impl<T> CompilerInfo<T>{
         self.program = program; 
     }
 
+    pub fn get_warinings(&self) -> &CompilerWarnings { &self.warnings }
     pub fn add_warning(&mut self, warning: CompilerWarning) { self.warnings.add_warning(warning) }
     pub fn add_warning_file_name_if_need(&mut self, file_name: String) {
         if !self.warnings.is_empty() { self.warnings.set_file(file_name) }

@@ -1,11 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use crate::bfcg::compiler::comand_compiler;
+
+use crate::LogisticParams;
+use crate::bfcg::compiler::comand_compiler::{self, PortNameHandler};
 use crate::bfcg::compiler::compiler_error::CompilerError;
 use crate::bfcg::compiler::compiler_option::CompilerOption;
 use crate::bfcg::compiler::compiler_warning::CompilerWarnings;
 use crate::bfcg::compiler::dif_part_helper::setting_action::SettingActions;
 use crate::bfcg::compiler::mnc_checker::HolderChekerMNC;
+use crate::bfcg::compiler::valid_cmd::ValidCMD;
 use crate::bfcg::compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType};
 use crate::bfcg::dev_emulators::cem::DevStdCem;
 use crate::bfcg::dev_emulators::cem::std_cem::{DEFAULT_CEM_MM_SIZE, DEFAULT_CEM_AM_SIZE};
@@ -17,10 +20,13 @@ use crate::bfcg::dev_emulators::std_dev::{get_std_win_dev_type, std_win_spec_con
 use crate::bfcg::dev_emulators::std_dev_constructor;
 use crate::bfcg::dev_emulators::win::dev_win::DevWin;
 use crate::bfcg::disasm::{std_disasm::std_disasm, std_disasm::StdDisasmInfo};
-use crate::bfcg::general::PAD;
+use crate::bfcg::general::{PAD, EXTENSION};
 use crate::bfcg::vm::std_processor::{AddDeviceOk, AddDeviceErr, ProcessorRunResult};
 use crate::bfcg::vm::{HardwareInfo, StdProcessor, Port};
 
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [+] MACRO
 macro_rules! ok_transform { 
     ($x:ident) => { if let Ok(x) = $x { x } else { return Err(()) } };
     ($x:expr) => { if let Ok(x) = $x { x } else { return Err(()) } };
@@ -28,8 +34,12 @@ macro_rules! ok_transform {
 
 macro_rules! none_transform { ($x:expr) => { if let Err(_) = $x { return } }; }
 
+// [-] MACRO
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [+] GEN
 
 pub fn gen_binary(cinfo: &CompilerInfo<u8>, path: &str) -> Result<(), ()> {
     let mut file = ok_transform!(std::fs::File::create(path));
@@ -48,13 +58,20 @@ pub fn gen_disasm_std(cinfo: &CompilerInfo<u8>, path: &str) -> Result<(), ()> {
     Ok(ret)
 }
 
-pub fn std_compile(
+// [-] GEN
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [+] COMPILE
+
+fn compile_helper<T, CC>(
     path: &str,
     mem_init_type: MemInitType, 
     checker: Option<HolderChekerMNC>, 
-    hardware_info: &HardwareInfo
-) 
--> Result<CompilerInfo<u8>, CompilerError> 
+    compiler: CC,
+) -> Result<CompilerInfo<T>, CompilerError> 
+where 
+    CC: comand_compiler::CmdCompiler<T> + PortNameHandler
 {
     let mut set_act = SettingActions::new();
     SettingActions::add_std_actions(&mut set_act, mem_init_type);
@@ -63,7 +80,7 @@ pub fn std_compile(
 
     let option = CompilerOption::new(
         mem_init_type,
-        comand_compiler::StdCmdCompiler::new(&hardware_info),
+        compiler,
         &set_act,
         vec![],
         &checker,
@@ -72,6 +89,37 @@ pub fn std_compile(
     crate::bfcg::compiler::compiler::compile(path.to_owned(), option, None)
 }
 
+pub fn std_compile(
+    path: &str,
+    mem_init_type: MemInitType, 
+    checker: Option<HolderChekerMNC>, 
+    hardware_info: &HardwareInfo
+) -> Result<CompilerInfo<u8>, CompilerError> 
+{
+    compile_helper(
+        path, mem_init_type, checker, 
+        comand_compiler::StdCmdCompiler::new(&hardware_info)
+    )
+}
+
+pub fn interpreter_compile(
+    path: &str, 
+    mem_init_type: MemInitType, 
+    checker: Option<HolderChekerMNC>
+) -> Result<CompilerInfo<ValidCMD>, CompilerError> 
+{
+    compile_helper(
+        path, mem_init_type, checker, 
+        comand_compiler::InterpreterCmdCompiler::new()
+    )
+}
+
+// [-] COMPILE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [+] PRINT
 pub fn device_ctor_warn_std_out(dev_ctor: &DevCtorOk, dev_name: &DevName) {
     if !dev_ctor.warns.is_empty() {
         println!("device <{}> construct WARNING:", dev_name.to_string());
@@ -79,7 +127,10 @@ pub fn device_ctor_warn_std_out(dev_ctor: &DevCtorOk, dev_name: &DevName) {
     } 
 }
 pub fn compiler_error_std_out(err: &CompilerError) { println!("COMPILE ERROR:\n{}", err.to_string()); }
-pub fn compiler_warn_std_out(warns: &CompilerWarnings) { println!("COMPILE WARNINGS:\n{}", warns.to_string()); }
+pub fn compiler_warn_std_out(warns: &CompilerWarnings) {
+    if warns.is_empty() { return } 
+    println!("COMPILE WARNINGS:\n{}", warns.to_string()); 
+}
 
 
 fn device_connecting_print(add_dev_res: Result<AddDeviceOk, AddDeviceErr>, dev_name: &DevName, port_num: usize) -> Result<(), ()> {
@@ -96,6 +147,48 @@ fn device_connecting_print(add_dev_res: Result<AddDeviceOk, AddDeviceErr>, dev_n
     Ok(())
 }
 
+// ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- -----
+// [=][+] GEN
+fn helper_gen_print<T>(c_info: &CompilerInfo<u8>, path: &str, path_folder: &str, name_of_gen: &str, gen_f: T) 
+where T: Fn(&CompilerInfo<u8>, &str) -> Result<(), ()>
+{
+    if let Err(_) = std::fs::create_dir_all(path_folder) { 
+        println!("ERROR during {} generate: can not create all folders in path: \"{}\"", name_of_gen, path_folder);
+    } else {
+        let mut path = std::path::Path::new(path).to_path_buf();
+        if let Some(ext) = path.extension() {
+            if ext != EXTENSION { println!("{} generate:<WEIRD [#1] ERROR>:supposed to not happen", name_of_gen); return } 
+        }
+        else { path.set_extension(EXTENSION); };
+        if let Some(file_name) = std::path::Path::new(&path).file_name() { 
+            let mut path_file = std::path::Path::new(path_folder).to_path_buf();
+            path_file.push(file_name);
+            let path_file = path_file.as_path().to_str().unwrap();
+            if let Err(_) = (gen_f)(&c_info, &path_file) { 
+                println!("ERROR during {} generate: can not create file \"{}\"", name_of_gen, path_file);
+            } else { println!("[{} successfully created]", name_of_gen); }
+        }
+        else {println!("{} generate:<WEIRD [#2] ERROR>:supposed to not happen", name_of_gen)};
+    }
+}
+
+fn bin_gen_print(c_info: &CompilerInfo<u8>, path: &str, path_bin: &str) {
+    helper_gen_print(c_info, path, path_bin, "binary", gen_binary)
+}
+
+fn disasm_std_gen_print(c_info: &CompilerInfo<u8>, path: &str, path_disasm: &str) {
+    helper_gen_print(c_info, path, path_disasm, "disasm", gen_disasm_std)
+}
+// [=][-] GEN
+// ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- -----
+
+// [-] PRINT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [+] RUN VM
+
 fn device_connecting(processor: &mut StdProcessor, dev_ctor: DevCtorOk, dev_name: &DevName, port_num: usize) -> Result<(), ()> {
     let add_dev_res = processor.add_device_boxed(dev_ctor.dev, port_num);
     device_connecting_print(add_dev_res, dev_name, port_num)
@@ -104,7 +197,7 @@ fn device_connecting(processor: &mut StdProcessor, dev_ctor: DevCtorOk, dev_name
 pub fn vm_run(
     hw_info: &HardwareInfo,
     mut logi_run: LogisticRun<u8>,
-) // TODO : NEED RET : PORT ERROR + RUN RES
+) // TODO:MAYBE:(BETTER): return Result<(), Err> THE ERROR: PORT ERROR + DEV ERROR + ... + RUN RES if not OK
 {
     let mut processor = StdProcessor::from_hardware_info(hw_info);
     
@@ -320,7 +413,11 @@ pub fn vm_run(
     // ---------------------------------------
 }
 
+// [-] RUN VM
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [+] (STRUCT): LOGISTIC RUN 
 pub struct LogisticRun<T>{
     program: Vec<T>,
     port_names: HashMap<String, usize>,
@@ -343,3 +440,30 @@ impl<T> LogisticRun<T>{
     pub fn get_devs(&self) -> &HashMap<Port, DevName> { &self.devs }
     pub fn get_port(&self, port_name: &str) -> Option<usize> { if let Some(x) = self.port_names.get(port_name) { Some(*x) } else { None } }
 }
+// [-] (STRUCT): LOGISTIC RUN 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pub fn main_logistics(x: &LogisticParams) {
+    let path = &x.file; 
+
+    let hw_info = HardwareInfo::from_logistic_params(x);
+    
+    let compiled = std_compile(path, MemInitType::BeforeCode, None, &hw_info);
+
+    let c_info = 
+    match compiled {
+        Err(err) => { compiler_error_std_out(&err); return },
+        Ok(x) => x,
+    };
+    println!("[successfully compiled]");
+
+    if x.need_bin { bin_gen_print(&c_info, path, &x.path_bin); }
+    if x.need_disasm { disasm_std_gen_print(&c_info, path, &x.path_disasm); }
+
+    compiler_warn_std_out(&c_info.get_warinings());
+
+    let logi_run = LogisticRun::new(c_info);
+    vm_run(&hw_info, logi_run);
+}
+
+

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::str::Chars;
 
 use crate::bfcg::compiler::dif_part_helper::settings::Setting;
+use crate::bfcg::general::EXTENSION;
 
 use super::comand_compiler::{CmdCompiler, PortNameHandler};
 use super::compiler_error::{CompilerError};
@@ -270,8 +271,8 @@ macro_rules! compile_mem_init_if_need {
 fn open_file(mut cur_path: Option<PathBuf>, file_name: &String) -> Option<(PathBuf, String)> {
     let mut new_path = Path::new(file_name).to_path_buf();
     
-    if let Some(ext) = new_path.extension() { if ext != "bf-ext" { return None } } 
-    else { new_path.set_extension("bf-ext"); }
+    if let Some(ext) = new_path.extension() { if ext != EXTENSION { return None } } 
+    else { new_path.set_extension(EXTENSION); }
 
     cur_path =
     if let Some(cur_path) = &cur_path {

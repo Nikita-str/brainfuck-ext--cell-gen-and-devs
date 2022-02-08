@@ -10,9 +10,11 @@ pub use logistics::compiler_warn_std_out;
 pub use logistics::device_ctor_warn_std_out;
 
 pub use logistics::std_compile;
+pub use logistics::interpreter_compile; // NEED INTERPRETER! issue #17
 
 pub use logistics::vm_run;
 
+pub use logistics::main_logistics;
 pub use logistics::LogisticRun;
 
 pub use logistic_params::LogisticParams;
