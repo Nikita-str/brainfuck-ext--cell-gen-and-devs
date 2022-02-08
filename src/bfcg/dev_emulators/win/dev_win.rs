@@ -152,5 +152,6 @@ impl Dev for DevWin {
     fn in_infinity_state(&self) -> bool { self.infinity }
 }
 
+impl crate::bfcg::dev_emulators::dev::ToDevComInit for DevWin {}
 // [-] DEV
 // -------------------------------------------------

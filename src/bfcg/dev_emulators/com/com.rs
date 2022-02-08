@@ -1,7 +1,7 @@
 use crate::{bfcg::
     {
         dev_emulators::{
-            dev::Dev, dev_utilities::mem_dev::CmdMemDevStartAction, 
+            dev::{Dev, ToDevComInit, DevComInit}, dev_utilities::mem_dev::CmdMemDevStartAction, 
             dev_constructor::{DevCtorOk, DevCtorErr, DevCtorHelper, DevCtor}
         }, 
         general::se_fn::{MIN_BIG_BYTE, std_se_decoding}
@@ -62,7 +62,7 @@ impl StartedActionInfo {
 // -------------------------------------------------
 // [+] DEV
 
-pub struct DevCom {
+pub struct DevStdCom {
     started_action: StartedActionInfo,
 
     inner: ComInner,
@@ -70,7 +70,7 @@ pub struct DevCom {
     infinity: bool,
 }
 
-impl DevCom {
+impl DevStdCom {
     pub fn new(mem_size: usize) -> Self {
         Self {
             started_action: StartedActionInfo::new(),
@@ -98,7 +98,7 @@ impl DevCom {
 
 const DEFAULT:u8 = 0x00;
 
-impl Dev for DevCom {
+impl Dev for DevStdCom {
     fn read_byte(&mut self) -> u8 {
         if !self.started_action.can_read() { self.error = true; }
         self.started_action.inform_read();
@@ -154,6 +154,15 @@ impl Dev for DevCom {
     dev_std_realise_have_error!();
 }
 
+impl ToDevComInit for DevStdCom {
+    fn to_dev_com_init(&mut self) -> Option<&mut dyn DevComInit> { Some(self) }
+}
+
+impl DevComInit for DevStdCom {
+    fn mem_set(&mut self, mem: Vec<u8>) { self.set_mem(mem) }
+    fn move_to_start(&mut self) { self.move_to_start() }
+}
+
 // [-] DEV
 // -------------------------------------------------
 
@@ -162,7 +171,7 @@ impl Dev for DevCom {
 // [-] DEV CTOR
 pub const DEFAULT_COM_MEM_SIZE: usize = 0x10_00_00; // 1 MB
 
-impl DevCtor for DevCom {
+impl DevCtor for DevStdCom {
     fn dev_ctor(dev_name_params: &std::collections::HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr> {
         let mut helper = DevCtorHelper::new(dev_name_params);
 
@@ -171,7 +180,7 @@ impl DevCtor for DevCom {
         helper.add_unused_warn();
         let warns = helper.take_warn();
 
-        Ok(DevCtorOk::new(Box::new(DevCom::new(mem_size)), warns))
+        Ok(DevCtorOk::new(Box::new(DevStdCom::new(mem_size)), warns))
     }
 }
 // [-] DEV CTOR

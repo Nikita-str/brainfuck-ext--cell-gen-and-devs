@@ -1,6 +1,6 @@
 use crate::{
     bfcg::dev_emulators::{
-        dev::Dev, 
+        dev::{Dev, ToDevComInit}, 
         dev_utilities::mem_dev::CellMemDevStartAction, 
         dev_constructor::{DevCtor, DevCtorErr, DevCtorHelper, DevCtorOk},
     }, 
@@ -135,6 +135,8 @@ impl Dev for DevStdCem {
     fn have_error(&self) -> bool { self.error || self.cem_inner.error() }
     fn in_infinity_state(&self) -> bool { self.infinity }
 }
+
+impl ToDevComInit for DevStdCem {}
 // [-] DEV
 // -----------------------------------------------
 

@@ -32,20 +32,34 @@ impl<'a> StdProcessor<'a> {
         Self::new(hw_info.max_port_amount, hw_info.default_com_port, hw_info.default_cem_port)
     }
 
-    /// only for before run
+    /// only for use before run
     /// 
     /// in run-time we can do this (in ASM) by SET instruction  
     pub fn hardware_change_com_port(&mut self, new_com_port: usize) {
         self.port_regs[PR_COM] = new_com_port;
     }
 
-    /// only for before run
+    /// only for use before run
     /// 
     /// in run-time we can do this (in ASM) by SET instruction  
     pub fn hardware_change_cem_port(&mut self, new_cem_port: usize) {
         self.port_regs[PR_CEM] = new_cem_port;
     }
-
+    /// only for use before run
+    ///
+    /// use carefully    
+    pub fn init_memory(&mut self, mem: Vec<u8>) -> Result<(), InitProcessorMemoryError> { 
+        let com_port = self.port_regs[PR_CEM];
+        if let Some(must_com) = self.devs.get_mut(&com_port) {
+            if let Some(com) = must_com.to_dev_com_init() {
+                com.mem_set(mem);
+                com.move_to_start();
+                Ok(())
+            } else {
+                Err(InitProcessorMemoryError::DevIsNotCom)
+            }
+        } else { Err(InitProcessorMemoryError::NoComDev) }
+    }
 
     pub fn new(port_amount: usize, pr_com: usize, pr_cem: usize) -> Self {
         let mut port_regs = [0; PR_AMOUNT];
@@ -287,6 +301,20 @@ pub enum ProcessorRunResult {
     NoCem,
 
     UnknownCom{ cmd: u8 },
+}
+
+pub enum InitProcessorMemoryError {
+    NoComDev,
+    DevIsNotCom,
+}
+
+impl ToString for InitProcessorMemoryError {
+    fn to_string(&self) -> String {
+        match self {
+            Self::NoComDev => String::from("no device in com-port"),
+            Self::DevIsNotCom => String::from("device in com-port in not COM so it's memory cant be init"),
+        }
+    }
 }
 
 impl ToString for ProcessorRunResult {

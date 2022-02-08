@@ -9,8 +9,9 @@ use crate::bfcg::compiler::mnc_checker::HolderChekerMNC;
 use crate::bfcg::compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType};
 use crate::bfcg::dev_emulators::dev_constructor::DevCtorOk;
 use crate::bfcg::dev_emulators::dev_name::DevName;
-use crate::bfcg::dev_emulators::std_dev::{get_std_win_dev_type, std_win_spec_constructor};
+use crate::bfcg::dev_emulators::std_dev::{get_std_win_dev_type, std_win_spec_constructor, StdWinDev};
 use crate::bfcg::dev_emulators::std_dev_constructor;
+use crate::bfcg::dev_emulators::win::dev_win::DevWin;
 use crate::bfcg::disasm::{std_disasm::std_disasm, std_disasm::StdDisasmInfo};
 use crate::bfcg::general::PAD;
 use crate::bfcg::vm::std_processor::{AddDeviceOk, AddDeviceErr, ProcessorRunResult};
@@ -75,8 +76,8 @@ pub fn compiler_error_std_out(err: &CompilerError) { println!("COMPILE ERROR:\n{
 pub fn compiler_warn_std_out(warns: &CompilerWarnings) { println!("COMPILE WARNINGS:\n{}", warns.to_string()); }
 
 
-fn device_connecting(processor: &mut StdProcessor, dev_ctor: DevCtorOk, dev_name: &DevName, port_num: usize) -> Result<(), ()> {
-    match processor.add_device_boxed(dev_ctor.dev, port_num) {
+fn device_connecting_print(add_dev_res: Result<AddDeviceOk, AddDeviceErr>, dev_name: &DevName, port_num: usize) -> Result<(), ()> {
+    match add_dev_res {
         Ok(AddDeviceOk::Ok) => {}
         Ok(AddDeviceOk::OldDevDisconected) => { 
             println!("device <{}> connecting WARNING: old device disconected", dev_name.to_string()); 
@@ -89,9 +90,14 @@ fn device_connecting(processor: &mut StdProcessor, dev_ctor: DevCtorOk, dev_name
     Ok(())
 }
 
+fn device_connecting(processor: &mut StdProcessor, dev_ctor: DevCtorOk, dev_name: &DevName, port_num: usize) -> Result<(), ()> {
+    let add_dev_res = processor.add_device_boxed(dev_ctor.dev, port_num);
+    device_connecting_print(add_dev_res, dev_name, port_num)
+}
+
 pub fn vm_run(
     hw_info: &HardwareInfo,
-    logi_run: LogisticRun<u8>,
+    mut logi_run: LogisticRun<u8>,
 ) // TODO : NEED RET : PORT ERROR + RUN RES
 {
     let mut processor = StdProcessor::from_hardware_info(hw_info);
@@ -103,7 +109,10 @@ pub fn vm_run(
     let mut win_device_type = vec![];
 
     let mut com_code_init = false;
+    let mut com_port = None;
+
     let mut cem_code_init = false;
+    let mut cem_port = None;
 
     let mut busy_port = HashSet::new();
     let mut dev_awaiting_for_connection = vec![];
@@ -115,16 +124,26 @@ pub fn vm_run(
         let port_num = match port {
             Port::Number(x) => Some(*x),
             Port::Name(x) =>  {
+                let port_num = logi_run.get_port(x);
+
                 if Port::more_than_one_uni_port_name(x) {
                     match Port::port_name_uniform(x).as_str() {
-                        "com" => { com_code_init = true; }
-                        "cem" => { cem_code_init = true; }
+                        "com" => { 
+                            if com_code_init && com_port.is_none() { println!("WARNING: reconected COM device") }
+                            com_code_init = true; 
+                            com_port = port_num; 
+                        }
+                        "cem" => { 
+                            if cem_code_init && cem_port.is_none() { println!("WARNING: reconected CEM device") }
+                            cem_code_init = true; 
+                            cem_port = port_num; 
+                        }
                         _ => {}
                     }
 
                 }
-                // TODO:CEM+COM
-                logi_run.get_port(x)
+
+                port_num
             }
             Port::Any => None,
         };
@@ -141,7 +160,7 @@ pub fn vm_run(
                     busy_port.insert(port_num);
                     none_transform!(device_connecting(&mut processor, dev_ctor, dev_name, port_num));
                 } else {
-                    dev_awaiting_for_connection.push(dev_ctor);
+                    dev_awaiting_for_connection.push((dev_ctor, dev_name));
                 }
                 continue 'dev_for
             }
@@ -150,15 +169,16 @@ pub fn vm_run(
                     if already_screen && x.is_screen() { 
                         println!("device <{}> construct ERROR:\nscreen alredy connected!\ncurrently you can connect only one screen.", dev_name.to_string());
                         return 
-                    } 
+                    }
                     if x.is_screen() { 
                         win_port = port_num;
                         if let Ok(x) = std_win_spec_constructor(dev_name) { win = Some(x) }
                         else { panic!("must never happen") }
                         already_screen = true; 
                     }
+                    if port_num.is_some() { busy_port.insert(port_num.unwrap()); }
                     need_run_win = true;
-                    win_device_type.push(x);
+                    win_device_type.push((x, dev_name));
                 } else {
                     println!("device <{}> construct ERROR: {}", dev_name.to_string(), err.to_string());
                     return
@@ -169,9 +189,88 @@ pub fn vm_run(
         // ---------------------------------------
     }
 
+    
+    // ---------------------------------------
+    // [+] CONNECTING AWAITED DEVICE:
+    let mut cur_port = 3; // need more than 0; 1 and 2 is for com&cem (by default) so let cur_port = 3; 
+    for (dev_ctor, dev_name) in dev_awaiting_for_connection {
+        while busy_port.contains(&cur_port) { cur_port += 1; }
+        none_transform!(device_connecting(&mut processor, dev_ctor, dev_name, cur_port));
+        cur_port += 1;
+    }
 
-    // TODO: HERE CONNECT REST
+    // COM:
+    if !com_code_init && com_port.is_none() {
+        let new_com_port = if busy_port.contains(&hw_info.default_com_port) {
+            while busy_port.contains(&cur_port) { cur_port += 1; }
+            cur_port
+        } else { hw_info.default_com_port };
 
+        processor.hardware_change_com_port(new_com_port);
+        if new_com_port != hw_info.default_com_port { 
+            println!("!: hardware COM port was changed from {} to {}", hw_info.default_com_port, new_com_port);
+            cur_port += 1;
+        }
+    }
+
+    // CEM:
+    if !cem_code_init && cem_port.is_none() {
+        let new_cem_port = if busy_port.contains(&hw_info.default_cem_port) {
+            while busy_port.contains(&cur_port) { cur_port += 1; }
+            cur_port
+        } else { hw_info.default_cem_port };
+
+        processor.hardware_change_com_port(new_cem_port);
+        if new_cem_port != hw_info.default_cem_port { 
+            println!("!: hardware COM port was changed from {} to {}", hw_info.default_cem_port, new_cem_port);
+            cur_port += 1;
+        }
+    }
+
+    // WIN:
+    if need_run_win {
+        if win.is_none() {
+            println!("ERROR: some of win-related-device is connected but screen is not!");
+            return
+        }
+        assert!(win_device_type.is_empty());
+        assert!(win_device_type.len() == 1, "DELETE this ASSERT when realise more device (curently realised only screen and it can be only one)");
+
+        // TODO: move out here: (it is analog for dev-creator)
+        for (x, dev_name) in win_device_type {
+            match x {
+                StdWinDev::Screen => {
+                    let win_dev = Box::new(DevWin::new(win.as_mut().unwrap()));
+                    
+                    let port = if let Some(port) = win_port { port }
+                    else {  
+                        while busy_port.contains(&cur_port) { cur_port += 1; }
+                        cur_port
+                    };
+
+                    let x = processor.add_device_boxed(win_dev, port);
+                    none_transform!(device_connecting_print(x, dev_name, port));
+
+                    if win_port.is_none() { cur_port += 1; }
+                }
+            }
+        }
+    }
+
+    // [-] CONNECTING AWAITED DEVICE
+    // ---------------------------------------
+
+    // ---------------------------------------
+    // [+] COM-DEV MEM INIT:
+    if let Err(x) = processor.init_memory(logi_run.take_program()) {
+        println!("ERROR in COM-DEV memory init: {}", x.to_string());
+        return
+    }
+    // [-] COM-DEV MEM INIT
+    // ---------------------------------------
+
+    // ---------------------------------------
+    // [+] CREATE RUN LOOP:
     let mut run_f = move||{
         println!("[+] RUN");
         println!("-----------------------");
@@ -184,13 +283,12 @@ pub fn vm_run(
             println!("[!!!]: {}", z.to_string());
         }
     };
+    // [-] CREATE RUN LOOP
+    // ---------------------------------------
 
+    // ---------------------------------------
+    // [+] RUN
     if need_run_win {
-        if win.is_none() {
-            println!("ERROR: some of win-related-device is connected but screen is not!");
-            return
-        }
-
         #[cfg(test)]
         { 
             println!("!!! YOU CANNOT RUN THIS AS TEST(run it from main):");
@@ -202,6 +300,8 @@ pub fn vm_run(
     } else {
         run_f();
     }
+    // [-] RUN
+    // ---------------------------------------
 }
 
 
@@ -209,12 +309,19 @@ pub struct LogisticRun<T>{
     program: Vec<T>,
     port_names: HashMap<String, usize>,
     devs: HashMap<Port, DevName>,
+    program_taked: bool,
 }
 
 impl<T> LogisticRun<T>{
     pub fn new(cinfo: CompilerInfo<T>) -> Self{
         let (port_names, devs, program) = cinfo.decompile();
-        Self { port_names, devs, program }
+        Self { port_names, devs, program, program_taked: false }
+    }
+
+    pub fn take_program(&mut self) -> Vec<T> {
+        if self.program_taked { panic!("[ALGO ERROR]: already taked") }
+        self.program_taked = true;
+        std::mem::take(&mut self.program)
     }
 
     pub fn get_devs(&self) -> &HashMap<Port, DevName> { &self.devs }

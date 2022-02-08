@@ -52,6 +52,7 @@ impl Dev for DevConsoleAscii {
     dev_std_realise_in_inf!();
     dev_std_realise_have_error!();
 }
+impl crate::bfcg::dev_emulators::dev::ToDevComInit for DevConsoleAscii {}
 
 
 dev_ctor_no_param_impl!(DevConsoleAscii);

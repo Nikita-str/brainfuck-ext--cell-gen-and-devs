@@ -1,5 +1,5 @@
 
-pub trait Dev: Send{
+pub trait Dev: Send + ToDevComInit {
     // TODO: if need add [mut_]{read_byte, write_byte}
 
     fn read_byte(&mut self) -> u8;
@@ -20,6 +20,18 @@ pub trait Dev: Send{
     /// ```
     fn in_infinity_state(&self) -> bool;
 }
+
+/// this trait used only for state init
+pub trait DevComInit {
+    fn mem_set(&mut self, mem: Vec<u8>);
+    fn move_to_start(&mut self);
+}
+
+// here need auto trait but it is unstable => night... => ok do by hands 
+pub /*auto*/ trait ToDevComInit {
+    fn to_dev_com_init(&mut self) -> Option<&mut dyn DevComInit> { None }
+}
+
 
 #[macro_export]
 macro_rules! dev_std_precheck_read_byte {
