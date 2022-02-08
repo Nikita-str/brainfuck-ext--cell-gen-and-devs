@@ -1,14 +1,15 @@
 [package]
 name = "bf_cell_gen"
-version = "0.1.0"
+
+# cause ~80% done  
+version = "0.8.0" 
+
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# winit = "0.26.1"
-# sdl2 = "0.35.1"
 glutin = "0.28.0"
 glium = "0.31.0"
-# phf = { version = "0.10.1", features = ["macros"] }
 boolvec = "0.2.6"
+clap = { version = "3.0.14", features = ["derive"] }

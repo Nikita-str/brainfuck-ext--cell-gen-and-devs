@@ -28,4 +28,34 @@ impl Port{
         if let Self::Name(x) = self { x }
         else { panic!("port is not name") }
     }
+
+    pub fn more_than_one_uni_port_name(port_name: &str) -> bool {
+        match port_name {
+            "win" | "display" | "screen" | "window" => true,
+            "com" | "cmd-mem" | "command-memory" => true,
+            "cem" | "cell-mem" | "cell-memory" => true,
+            _ => false,
+        }
+    }
+
+    pub fn  port_name_uniform(port_name: &str) -> String{
+        match port_name {
+            "win" | "display" | "screen" | "window" => String::from("screen"),
+            "com" | "cmd-mem" | "command-memory" => String::from("com"),
+            "cem" | "cell-mem" | "cell-memory" => String::from("cem"),
+            _ => port_name.to_string(),
+        }
+    }
+
+}
+
+
+impl ToString for Port {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Number(x) => format!("[{}]", x), 
+            Self::Name(x) => format!("[{}]", x), 
+            Self::Any => format!("[ANY]"), 
+        }
+    }
 }

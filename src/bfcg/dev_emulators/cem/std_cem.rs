@@ -141,14 +141,14 @@ impl Dev for DevStdCem {
 
 // -----------------------------------------------
 // [+] DEV CTOR:
-const DEFAULT_MM_SIZE:usize = 0x10000;
-const DEFAULT_AM_SIZE:usize = 0x10000;
+pub const DEFAULT_CEM_MM_SIZE:usize = 0x10000;
+pub const DEFAULT_CEM_AM_SIZE:usize = 0x10000;
 
 impl DevCtor for DevStdCem {
     fn dev_ctor(dev_name_params: &std::collections::HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr> {
         let mut helper = DevCtorHelper::new(dev_name_params);
-        let mm_size = dev_ctor_parse_unwrap!(helper, "mm-sz", DEFAULT_MM_SIZE);
-        let am_size = dev_ctor_parse_unwrap!(helper, "am-sz", DEFAULT_AM_SIZE);
+        let mm_size = dev_ctor_parse_unwrap!(helper, "mm-sz", DEFAULT_CEM_MM_SIZE);
+        let am_size = dev_ctor_parse_unwrap!(helper, "am-sz", DEFAULT_CEM_AM_SIZE);
         
         helper.add_unused_warn();
         let warns = helper.take_warn();

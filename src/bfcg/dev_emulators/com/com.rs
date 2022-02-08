@@ -160,13 +160,13 @@ impl Dev for DevCom {
 
 // -------------------------------------------------
 // [-] DEV CTOR
-const DEFAULT_MEM_SIZE: usize = 0x10_00_00; // 1 MB
+pub const DEFAULT_COM_MEM_SIZE: usize = 0x10_00_00; // 1 MB
 
 impl DevCtor for DevCom {
     fn dev_ctor(dev_name_params: &std::collections::HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr> {
         let mut helper = DevCtorHelper::new(dev_name_params);
 
-        let mem_size = dev_ctor_parse_unwrap!(helper, "mem-sz", DEFAULT_MEM_SIZE);
+        let mem_size = dev_ctor_parse_unwrap!(helper, "mem-sz", DEFAULT_COM_MEM_SIZE);
     
         helper.add_unused_warn();
         let warns = helper.take_warn();

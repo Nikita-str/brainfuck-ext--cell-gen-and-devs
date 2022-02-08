@@ -15,6 +15,10 @@ pub enum DevCtorErr {
     Other(String),
 }
 
+impl DevCtorErr {
+    pub fn is_unknown(&self) -> bool { matches!(self, Self::UnknownName(_)) }
+}
+
 impl ToString for DevCtorErr {
     fn to_string(&self) -> String {
         match self {
@@ -30,6 +34,14 @@ pub enum DevCtorWarn {
     Other(String),
 }
 
+impl ToString for DevCtorWarn {
+    fn to_string(&self) -> String {
+        match self {
+            Self::UnusedDevParam(x) => format!("unused parameter name \"{}\"", x), 
+            Self::Other(x) => x.to_owned(), 
+        }
+    }
+}
 
 pub struct DevCtorOk{
     pub dev: Box<dyn Dev>,
@@ -51,6 +63,10 @@ pub trait DevCtor {
 
 pub trait DevWinCtor {
     fn dev_win_ctor(win: &mut SpecialWin, dev_name_params: &HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr>;
+}
+
+pub trait SpecialWinCtor {
+    fn special_win_ctor(dev_name_params: &HashMap<String, String>) -> Result<SpecialWin, DevCtorErr>;
 }
 
 // [-] TRAIT

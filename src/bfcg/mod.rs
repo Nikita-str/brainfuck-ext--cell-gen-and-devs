@@ -4,3 +4,5 @@ pub mod disasm;
 pub mod vm;
 
 pub (in super) mod general;
+
+pub mod logistics;

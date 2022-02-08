@@ -28,6 +28,25 @@ const PR_CEM:usize = MEM_CELL_PR;
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // [+] INIT 
 impl<'a> StdProcessor<'a> {
+    pub fn from_hardware_info(hw_info: &super::HardwareInfo) -> Self {
+        Self::new(hw_info.max_port_amount, hw_info.default_com_port, hw_info.default_cem_port)
+    }
+
+    /// only for before run
+    /// 
+    /// in run-time we can do this (in ASM) by SET instruction  
+    pub fn hardware_change_com_port(&mut self, new_com_port: usize) {
+        self.port_regs[PR_COM] = new_com_port;
+    }
+
+    /// only for before run
+    /// 
+    /// in run-time we can do this (in ASM) by SET instruction  
+    pub fn hardware_change_cem_port(&mut self, new_cem_port: usize) {
+        self.port_regs[PR_CEM] = new_cem_port;
+    }
+
+
     pub fn new(port_amount: usize, pr_com: usize, pr_cem: usize) -> Self {
         let mut port_regs = [0; PR_AMOUNT];
         port_regs[PR_COM] = pr_com;
@@ -47,8 +66,8 @@ impl<'a> StdProcessor<'a> {
         }
     }
 
-    pub fn add_device_boxed(&mut self, dev: Box<dyn Dev + 'a>, port: usize) -> Result<AddDeviceOk, ()> {
-        if port >= self.port_amount { return Err(()) }
+    pub fn add_device_boxed(&mut self, dev: Box<dyn Dev + 'a>, port: usize) -> Result<AddDeviceOk, AddDeviceErr> {
+        if port >= self.port_amount { return Err(AddDeviceErr::TooBigPortNum) }
 
         if let Some(_) = self.devs.insert(port, dev) { 
             Ok(AddDeviceOk::OldDevDisconected)
@@ -57,7 +76,7 @@ impl<'a> StdProcessor<'a> {
         }        
     }
 
-    pub fn add_device<D: 'a + Dev>(&mut self, dev: D, port: usize) -> Result<AddDeviceOk, ()> {
+    pub fn add_device<D: 'a + Dev>(&mut self, dev: D, port: usize) -> Result<AddDeviceOk, AddDeviceErr> {
         self.add_device_boxed(Box::new(dev), port)
     }
 }
@@ -244,6 +263,10 @@ impl<'a> StdProcessor<'a> {
 pub enum AddDeviceOk{
     Ok,
     OldDevDisconected,
+}
+
+pub enum AddDeviceErr{
+    TooBigPortNum,
 }
 
 pub enum ProcessorRunResult {

@@ -37,6 +37,8 @@ impl<T> CompilerInfo<T>{
         }
     }
 
+    pub fn decompile(self) -> (HashMap<String,usize>, HashMap<Port, DevName>, Vec<T>) { (self.port_names, self.devs, self.program) }
+
     pub fn take_path(&mut self) -> Option<std::path::PathBuf> { self.inter_info.take_path() }
     pub fn set_path(&mut self, path: std::path::PathBuf) { self.inter_info.set_path(path) }
 

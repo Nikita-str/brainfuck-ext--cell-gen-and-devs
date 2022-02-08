@@ -9,6 +9,9 @@ use glutin::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 use glutin::window::{WindowBuilder, WindowId};
 use glutin::ContextBuilder;
 
+use crate::bfcg::dev_emulators::dev_constructor::{SpecialWinCtor, DevCtorHelper};
+use crate::dev_ctor_parse_unwrap;
+
 pub struct Win{
     need_redraw: Arc<AtomicBool>,
     need_exit: Arc<AtomicBool>,
@@ -433,3 +436,47 @@ impl SpecialWin{
         });
     } 
 }
+
+
+// -------------------------------------------------
+// [+] SPECIAL WIN CTOR: 
+
+const DEFAULT_W:u32 = 500; 
+const DEFAULT_H:u32 = 220; 
+
+const DEFAULT_X:u32 = 300;
+const DEFAULT_Y:u32 = 300;
+
+struct PrivateSpecialWinPos{ pub x: u32, pub y: u32 }
+
+impl std::str::FromStr for PrivateSpecialWinPos {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some((x, y)) = s.split_once("+") {  
+            let x = x.parse();
+            let y = y.parse();
+            if let (Ok(x), Ok(y)) = (x, y) { Ok(Self{x, y}) }
+            else { Err(()) }
+        } else {  Err(()) }
+    }
+}
+
+impl SpecialWinCtor for SpecialWin {
+    fn special_win_ctor(dev_name_params: &std::collections::HashMap<String, String>) -> 
+    Result<SpecialWin, crate::bfcg::dev_emulators::dev_constructor::DevCtorErr> 
+    {
+        let mut helper = DevCtorHelper::new(dev_name_params);
+
+        let w = dev_ctor_parse_unwrap!(helper, "w", DEFAULT_W);
+        let h = dev_ctor_parse_unwrap!(helper, "h", DEFAULT_H);
+
+        let default = PrivateSpecialWinPos{x: DEFAULT_X, y: DEFAULT_Y};
+        let pos = dev_ctor_parse_unwrap!(helper, "x+y", default);
+
+        Ok(Win::new_all(w, h, (pos.x, pos.y)))
+    }
+}
+
+// [-] SPECIAL WIN CTOR 
+// -------------------------------------------------
