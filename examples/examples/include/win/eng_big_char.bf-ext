@@ -1,0 +1,271 @@
+; INCLUDE:
+##b_pixel#  
+
+; MACROS:
+#B+from-bottom-symb-pix-to-top # 0+** [%B+8%-]#
+
+# B+next-symb # %B+6%%B+6% #
+# indent # %B+2%%B+2% %B+6%%B+6% #
+
+# B+next-line # 0+*+*+ [%B+2%-] #
+
+#<SPACE># 0+* [%B+6%-] #
+
+#<A>#
+    %B+2%
+    0+** %B+draw-v-line-down% 
+    %B+8%
+    +*+ [%B+6%-]
+    +** %B+draw-v-line-up%
+    ++ [> %B+4% %B+set-pixel% <-]
+    ++ [%B+2%-]
+    ++ [> %B+set-pixel% %B+6% <-]
+    ++ [%B+8%-]
+#
+
+#<B>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    +*+  %B+draw-h-line-6% 
+    ++ [%B+8% > %B+set-pixel% < %B+8% -]
+    %B+4%
+    +* %B+draw-h-line-4%
+    ++ [%B+2%-]
+    +*+  %B+draw-h-line-6% 
+    ++ [%B+8%-]
+#
+
+#<C>#
+    %B+2%
+    0+*+ %B+draw-v-line-down% 
+    %B+6%
+    +*+ %B+draw-h-line-6%
+    %B+4%
+    % B+from-bottom-symb-pix-to-top %
+    +*+ %B+draw-h-line-4%
+    +*+ [%B+6%-]
+#
+
+#<D>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    +*+ %B+draw-h-line-6%
+    %B+8%
+    +*+ %B+draw-v-line-up%
+    %B+4%
+    +* %B+draw-h-line-4%
+    +++ [%B+6%-]
+#
+
+#<E>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    0+**  %B+draw-h-line-6% %B+4%
+    %B+4%%B+8%%B+8%
+    0+*+ %B+draw-h-line-4% %B+6%
+    %B+8%%B+8%
+    0+**  %B+draw-h-line-6% %B+4%
+#
+
+#<F>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    +*+  [%B+6%-]
+    %B+4%%B+8%%B+8%
+    0+*+ %B+draw-h-line-4% %B+6%
+    %B+8%%B+8%
+    0+**  %B+draw-h-line-6% %B+4%
+#
+
+#<G>#
+    %B+2%
+    0+*+ %B+draw-v-line-down% 
+    %B+6%
+    +* %B+draw-h-line-6%
+    +*+ %B+draw-v-line-up% %B+2%
+    %B+4% > %B+set-pixel% < %B+4%
+    +* [%B+8%-]
+    +*+ %B+draw-h-line-6% %B+4%
+#
+
+#<H># 
+    0+**+ %B+draw-v-line-down% %B+8%; draw vertical line len 5
+    %B+6%%B+6%%B+6%
+    0+**+ %B+draw-v-line-up% %B+2%
+    %B+2%%B+2%%B+4%
+    >
+    %B+set-pixel% %B+4%
+    %B+set-pixel% %B+6%
+    %B+6%%B+8%%B+8%
+    <
+#
+
+#<I>#
+    0+*  %B+draw-h-line-6% 
+    > %B+set-pixel% < %B+4%
+    +**+ %B+draw-v-line-down% %B+8%
+    %B+4%
+    +*+  %B+draw-h-line-6% %B+4%
+    % B+from-bottom-symb-pix-to-top %
+#
+
+#<J>#
+    0+*+ [%B+2%-] > %B+set-pixel% <
+    %B+62%
+    +*  %B+draw-h-line-6% %B+8%
+    +** %B+draw-v-line-up% %B+2%
+#
+
+#<K>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    +*+ [%B+6%-]
+    +* [>%B+set-pixel%< %B+84% -]
+    >%B+set-pixel%<
+    +* [%B+68% >%B+set-pixel%< -]
+#
+
+#<L>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    0+*+  %B+draw-h-line-6% %B+4%
+    % B+from-bottom-symb-pix-to-top %
+#
+
+#<M>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    +** [%B+6%-]
+    +**+ %B+draw-v-line-up% %B+2%
+    %B+42% >%B+set-pixel%< %B+42%
+    ++ [>%B+set-pixel%< %B+48%-]
+    +** [%B+6%-]
+#
+
+#<N>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    +*+ [%B+8%-] %B+6% >%B+set-pixel%<
+    %B+6% %B+2% >%B+set-pixel%<
+    %B+2% %B+2% %B+6%
+    +**+ %B+draw-v-line-up% %B+2%
+#
+
+#<O>#
+    %B+2%
+    0+*+ %B+draw-v-line-down% 
+    ++ [>%B+6% %B+set-pixel% <-]
+    %B+6% %B+8%
+    0+*+ %B+draw-v-line-up%
+    ++ [>%B+4% %B+set-pixel% <-]
+    %B+6% %B+6%
+#
+
+#<P>#
+    0+**+ %B+draw-v-line-down%
+    +*+ [%B+8%-]
+    +*+ %B+draw-h-line-6% 
+    %B+8% >%B+set-pixel%< 
+    %B+48%
+    +*+ %B+draw-h-line-4% 
+    +** [%B+6%-]
+#
+
+#<Q>#
+    %B+2%
+    0+*+ %B+draw-v-line-down% 
+    ++ [>%B+6% %B+set-pixel% <-]
+    %B+8% >%B+set-pixel%<
+    ++ [%B+6%-]
+    %B+2% >%B+set-pixel%<
+    %B+48%
+    0+*+ %B+draw-v-line-up%
+    ++ [>%B+4% %B+set-pixel% <-]
+    +*+ [%B+6%-]
+#
+
+#<R>#
+    0+**+ %B+draw-v-line-down% %B+8%
+    +** [%B+6%-]
+    >%B+set-pixel%<
+    ++ [%B+8% %B+4% >%B+set-pixel%<-]
+    %B+4% >%B+set-pixel%<
+    %B+8% %B+8%
+    +++ %B+draw-h-line-6%
+    %B+4% %B+2% >%B+set-pixel%<
+    %B+8% %B+6%
+#
+
+#<S>#
+    %B+2% >%B+set-pixel%<
+    0+++ [%B+2%-]
+    +++ %B+draw-h-line-6%
+    %B+8% >%B+set-pixel%< %B+8%
+    ++ [>%B+4% %B+set-pixel% <-]
+    %B+8% %B+8%
+    +++ %B+draw-h-line-6%
+    %B+4%
+#
+
+#<T>#
+    0+* %B+draw-h-line-6% 
+    > %B+set-pixel% < %B+4%
+    +**+ %B+draw-v-line-down% %B+8%
+    % B+from-bottom-symb-pix-to-top %
+    %B+6%
+#
+
+#<U># 0
+    +**  %B+draw-v-line-down% %B+6%
+    +* %B+draw-h-line-6% %B+8%
+    +**  %B+draw-v-line-up% %B+2%
+#
+
+;; NEED POSIBILITY OF CELL CREATING
+;
+#<V>#
+    0+* [c +*  %B+draw-v-line-down% %B+6% d -]
+    > %B+set-pixel% < %B+86%
+    0+* [c +*  %B+draw-v-line-up% %B+6% d -]
+    %B+24%
+#
+
+#<W>#
+    0+** %B+draw-v-line-down% 
+    %B+6% 
+    > 
+        %B+set-pixel% %B+6%%B+8%
+        %B+set-pixel% %B+8%
+        %B+set-pixel% %B+2%%B+2%%B+6%
+        %B+set-pixel% %B+6%%B+8%
+    <
+    0+** %B+draw-v-line-up% %B+2%
+#
+
+#<X># 0
+    +**+ [>%B+set-pixel%< %B+62% -] %B+48%
+    +** [%B+4%-]
+    +**+ [>%B+set-pixel%< %B+68% -] %B+42%
+#
+
+#<Y># 0
+    +*+ [>%B+set-pixel%< %B+62% -] %B+48%
+    +*+ %B+draw-v-line-down% 
+    +*+ [%B+8%-]
+    +*+ [>%B+set-pixel%< %B+68% -] %B+42%
+#
+
+#<Z># 0
+    +** %B+draw-h-line-6% %B+42%
+    +*+ [>%B+set-pixel%< %B+42% -]
+    +** %B+draw-h-line-6% % B+4 %
+    %B+from-bottom-symb-pix-to-top%
+#
+
+
+
+;; comment for <H>:
+;;
+;; CEM: we stay 1 cell before start of color-seq RGBA
+;;
+;;   here
+;;    |
+;;    V
+;;    X  X<-- end here
+;;    X  X
+;;    XXXX
+;;    X  X
+;;    X  X
+;;

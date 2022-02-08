@@ -1,10 +1,12 @@
+; if you not understand syntaxis then please check specification
+
 ;; this example write in std-out "helwo demvice wowld?".
 ;; the output phrase is a slurred phrase "hello device world!\n"
 
 ;; ASCII seq: 104 101 108 119 111 32 100 101 109 118 105 99 101 32 119 111 119 108 100 63 10
 
 'dis-all-dev'                      ; disconnect all devices
-'port-name:console:4'              ; TODO:DEL (auto console)
+'port-name:console:4'
 'dev[console]:ascii-console'       ; connect console that out cell value in ascii form
 
 ; all spaces ignored:

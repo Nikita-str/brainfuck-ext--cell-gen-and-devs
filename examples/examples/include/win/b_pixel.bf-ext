@@ -1,0 +1,27 @@
+; INCLUDE:
+##pixel#        
+
+; MACROS:
+# B+set-pixel # %set-pixel% 6 %set-pixel% 2 %set-pixel% 4 %set-pixel% 8 #
+
+# B+2 # 22 #
+# B+4 # 44 #
+# B+6 # 66 #
+# B+8 # 88 #
+
+# B+62 # %B+6%%B+2% #
+# B+26 # %B+62% #
+
+# B+68 # %B+6%%B+8% #
+# B+86 # %B+68% #
+
+# B+42 # %B+4%%B+2% #
+# B+24 # %B+42% #
+
+# B+48 # %B+4%%B+8% #
+# B+84 # %B+48% #
+
+# B+draw-v-line-down # [>%B+set-pixel%<%B+2%-] #
+# B+draw-v-line-up #   [>%B+set-pixel%<%B+8%-] #
+# B+draw-h-line-6 # [>%B+set-pixel%<%B+6%-] #
+# B+draw-h-line-4 # [>%B+set-pixel%<%B+4%-] #

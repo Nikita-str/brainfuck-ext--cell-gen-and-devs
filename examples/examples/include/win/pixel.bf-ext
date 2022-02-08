@@ -1,0 +1,9 @@
+# set-pixel # 5>5>5>5 <<< #
+
+;; CEM: 
+;; [len] r g b a  
+;;
+# draw-v-line-down # [>%set-pixel%<2-] #
+# draw-v-line-up #   [>%set-pixel%<8-] #
+# draw-h-line-6 # [>%set-pixel%<6-] #
+# draw-h-line-4 # [>%set-pixel%<4-] #

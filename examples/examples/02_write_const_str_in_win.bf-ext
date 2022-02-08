@@ -1,205 +1,64 @@
-;; let draw a similar string "hello screen world"
+;; let draw string "hello screen world"
 
-'dis-all-dev'                         ; disconnect all devices
-'port-name:screen:42'                 ; TODO:DEL (auto win)
-'dev[screen]:std-win:w=400:h=200'     ; connect screen aka win aka display 
-
-
-;; use 4 mem cell, (you can create them and after use delete)
-;; set mem in 34 165 127 0xFF
-;;
-# create-green-seq # 
-    z +****+* $$     ; 34 34 [34] ?
-    --**- $          ; 34 34 127 [127]
-    *+ <<            ; 34 [34] 127 255
-    ///+***+**+ <    ; [34] 165 127 0xFF
-#
-
-;; NEED POSSIBILITY TO CELL CREATON !
-;; use 4 mem cell, (you can create them and after use delete)
-;; set mem in 153 102 204 0xFF
-;;
-# create-ame-seq # 
-    z c++ [< *+***+ >-] d >    ; 153 [?] ? ?           ; just c d use; this line eq: z +***+*+***+ > 
-    z +*+***+*+* $             ; 153 102 [102] ?
-    * >                        ; 153 102 204 [?]
-    z - <<<                    ; [153] 102 102 0xFF
-#
+;#######################################################
+;#
+;#   SETTINGS:
+;#
+    'dis-all-dev'                         ; disconnect all devices if some is connect
+    'port-name:screen:42'
+    'dev[screen]:std-win:w=400:h=200'     ; connect screen aka win aka display 
 
 
-# set-pixel # 5>5>5>5 <<< #
-# B+set-pixel # %set-pixel% 6 %set-pixel% 2 %set-pixel% 4 %set-pixel% 8 #
+;#######################################################
+;#
+;#   INCLUDE:
+;#
 
-# B+2 # 22 #
-# B+4 # 44 #
-# B+6 # 66 #
-# B+8 # 88 #
+; ##include/win/pixel#              ; TODO: (in this code not needed but if was?)
+; ##include/win/b_pixel#            ; TODO: (   => need solve issue #15          )
 
-;; CEM: 
-;; [len] r g b a  
-# draw-v-line-down # [>%set-pixel%<2-] #
-# B+draw-v-line-down # [>%B+set-pixel%<%B+2%-] #
+##include/win/eng_big_char.bf-ext#  ; here DEFINE all "<X>" function where X is from [A..Z]
 
-# draw-v-line-up #   [>%set-pixel%<8-] #
-# B+draw-v-line-up #   [>%B+set-pixel%<%B+8%-] #
+##include/win/colors#               ; here DEFINE %create-green-seq%, %create-ame-seq%
 
-
-# draw-h-line-6 # [>%set-pixel%<6-] #
-# B+draw-h-line-6 # [>%B+set-pixel%<%B+6%-] #
-# draw-h-line-4 # [>%set-pixel%<4-] #
-# B+draw-h-line-4 # [>%B+set-pixel%<%B+4%-] #
+;#######################################################
+;#
+;#   MACROS:       (macros that needed exclusively for this program, 
+;#                         so them not moved out to some include file)
+;#
 
 # next-symb # 66 #
-# B+next-symb # %B+6%%B+6% #
 # next-line # 22 #
-# B+next-line # %B+2%%B+2% #
 
-#from-bottom-symb-pix-to-top # z+** [8-] #
-#B+from-bottom-symb-pix-to-top # z+** [%B+8%-]#
-
-;; CEM: we stay 1 cell before start of color-seq RGBA
-;;
-;;   here
-;;    |
-;;    V
-;;    X  X<-- end here
-;;    X  X
-;;    XXXX
-;;    X  X
-;;    X  X
-;;
-#<h># 
-    z+**+ %draw-v-line-down% 8; draw vertical line len 5
-    666
-    z+**+ %draw-v-line-up% 2
-    224
-    >
-    %set-pixel% 4
-    %set-pixel% 6
-    688
-    <
+# print:HELLO #
+    %<H>% %B+next-symb%
+    %<E>% %B+next-symb%
+    %<L>% %B+next-symb%
+    %<L>% %B+next-symb%
+    %<O>% %B+next-symb%
 #
 
-#<H># 
-    z+**+ %B+draw-v-line-down% %B+8%; draw vertical line len 5
-    %B+6%%B+6%%B+6%
-    z+**+ %B+draw-v-line-up% %B+2%
-    %B+2%%B+2%%B+4%
-    >
-    %B+set-pixel% %B+4%
-    %B+set-pixel% %B+6%
-    %B+6%%B+8%%B+8%
-    <
+# print:SCREEN #
+    %<S>% %B+next-symb%
+    %<C>% %B+next-symb%
+    %<R>% %B+next-symb%
+    %<E>% %B+next-symb%
+    %<E>% %B+next-symb%
+    %<N>% %B+next-symb%
 #
 
-#<e>#
-    z+**+ %draw-v-line-down% 8
-    z+**  %draw-h-line-6% 4
-    488
-    z+*+ %draw-h-line-4% 6
-    88
-    z+**  %draw-h-line-6% 4
+# print:WORLD #
+    %<W>% %B+next-symb%
+    %<O>% %B+next-symb%
+    %<R>% %B+next-symb%
+    %<L>% %B+next-symb%
+    %<D>% %B+next-symb% 
 #
 
-#<E>#
-    z+**+ %B+draw-v-line-down% %B+8%
-    z+**  %B+draw-h-line-6% %B+4%
-    %B+4%%B+8%%B+8%
-    z+*+ %B+draw-h-line-4% %B+6%
-    %B+8%%B+8%
-    z+**  %B+draw-h-line-6% %B+4%
-#
-
-#<l>#
-    z+**+ %draw-v-line-down% 8
-    z+*+  %draw-h-line-6% 4
-    % from-bottom-symb-pix-to-top %
-#
-# <L-small> # %<l>% #
-
-#<L>#
-    z+**+ %B+draw-v-line-down% %B+8%
-    z+*+  %B+draw-h-line-6% %B+4%
-    % B+from-bottom-symb-pix-to-top %
-#
-
-#<W>#
-    z+** %B+draw-v-line-down% 
-    %B+6% 
-    > 
-        %B+set-pixel% %B+6%%B+8%
-        %B+set-pixel% %B+8%
-        %B+set-pixel% %B+2%%B+2%%B+6%
-        %B+set-pixel% %B+6%%B+8%
-    <
-    z+** %B+draw-v-line-up% %B+2%
-#
-
-#<O>#
-    %B+2%
-    z+*+ %B+draw-v-line-down% 
-    ++ [>%B+6% %B+set-pixel% <-]
-    %B+6% %B+8%
-    z+*+ %B+draw-v-line-up%
-    ++ [>%B+4% %B+set-pixel% <-]
-    %B+6% %B+6%
-#
-
-#<SPACE># z+* [%B+6%-] #
-
-#<S>#
-    %B+2% >%B+set-pixel%<
-    z+++ [%B+2%-]
-    +++ %B+draw-h-line-6%
-    %B+8% >%B+set-pixel%< %B+8%
-    ++ [>%B+4% %B+set-pixel% <-]
-    %B+8% %B+8%
-    +++ %B+draw-h-line-6%
-    %B+4%
-#
-
-#<C>#
-    %B+2%
-    z+*+ %B+draw-v-line-down% 
-    %B+6%
-    +*+ %B+draw-h-line-6%
-    %B+4%
-    % B+from-bottom-symb-pix-to-top %
-    +*+ %B+draw-h-line-4%
-    +*+ [%B+6%-]
-#
-
-#<D>#
-    z+**+ %B+draw-v-line-down% %B+8%
-    +*+ %B+draw-h-line-6%
-    %B+8%
-    +*+ %B+draw-v-line-up%
-    %B+4%
-    +* %B+draw-h-line-4%
-    +++ [%B+6%-]
-#
-
-#<R>#
-    z+**+ %B+draw-v-line-down% %B+8%
-    +** [%B+6%-]
-    >%B+set-pixel%<
-    ++ [%B+8% %B+4% >%B+set-pixel%<-]
-    %B+4% >%B+set-pixel%<
-    %B+8% %B+8%
-    +++ %B+draw-h-line-6%
-    %B+4% %B+2% >%B+set-pixel%<
-    %B+8% %B+6%
-#
-
-
-#<N>#
-    z+**+ %B+draw-v-line-down% %B+8%
-    +*+ [%B+8%-] %B+6% >%B+set-pixel%<
-    %B+6% %B+2% >%B+set-pixel%<
-    %B+2% %B+2% %B+6%
-    +**+ %B+draw-v-line-up% %B+2%
-#
-
+;#######################################################
+;#
+;#    CODE:
+;#
 
 + 
 > %create-green-seq% <
@@ -210,71 +69,53 @@
 ;; move left while x != 0x01
 c <$-z [d<  c <$-z] d
 
+;; CUR CEM (ONLY MAIN MEMORY):  
+;;   1 RGBA 2 RGBA 00 .. 
+;;   ↑
+;;  stay 
+;;  here 
+
 [
     c
-    %B+2%%B+2%
-    %B+6%%B+6%
-    %<H>%
-    %B+next-symb%
-    %<E>% 
-    %B+next-symb%
-    %<L>% 
-    %B+next-symb%
-    %<L>% 
-    %B+next-symb%
-    %<O>% 
-    %B+next-symb%
-    
-    %<SPACE>%
-
-    %B+next-symb%
-    %<S>%
-    %B+next-symb%
-    %<C>%
-    %B+next-symb%
-    %<R>%
-    %B+next-symb%
-    %<E>% 
-    %B+next-symb%
-    %<E>% 
-    %B+next-symb%
-    %<N>% 
-    %B+next-symb%
-
-    %<SPACE>%
-
-    %B+next-symb%
-    %<W>% 
-    %B+next-symb%
-    %<O>% 
-    %B+next-symb%
-    %<R>% 
-    %B+next-symb%
-    %<L>% 
-    %B+next-symb%
-    %<D>% 
-    %B+next-symb% 
+    %indent%
+    %print:HELLO%
+    %<SPACE>%%B+next-symb%
+    %print:SCREEN%
+    %<SPACE>%%B+next-symb%
+    %print:WORLD%
     @ 
     d
 
+
     ;; if 0x01 => CEM: +5
     ;; else    => CEM: -5
+    ;;    
+    ;; so if CEM was:  
+    ;;   1 RGBA 2 RGBA 00 .. 
+    ;;   ↑
+    ;; then it will:
+    ;;   1 RGBA 2 RGBA 00 .. 
+    ;;          ↑
     ;;
+    ;; and if it was:
+    ;;   1 RGBA 2 RGBA 00 .. 
+    ;;          ↑
+    ;; then it will:
+    ;;   1 RGBA 2 RGBA 00 .. 
+    ;;   ↑
+    ;;
+    ;; thus next code change next-frame-symbol-color:  
+    ;
+    ;
     c<$ -z c<$ 
     [dd <<<<< c+c]
     d -
     [d >>>>> c]
     d
 
-    ;; in 03 here we call timer! for not wery often redraw
+    ;; here we need timer for not wery often redraw
+    ;; in {TODO:EXMP_N(for example 02)} here we call timer! 
 ]
 
-;+>>%create-green-seq%<< 
-;[> 
-;%B+2%%B+2%
-;%B+6%%B+6%
-;%<H>% 
-;@ 
-;<]
 
 ;->>%create-green-seq%<<  [>>%B+set-pixel% %B+6% %B+set-pixel% %B+2% %B+4% %B+set-pixel% %B+6%<<-] @

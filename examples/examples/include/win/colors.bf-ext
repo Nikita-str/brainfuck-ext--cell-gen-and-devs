@@ -1,0 +1,23 @@
+;; use 4 mem cell, (you can create them and after use delete)
+;; set mem in 34 165 127 0xFF
+;;
+# create-green-seq # 
+    0 +****+* $$     ; 34 34 [34] ?
+    --**- $          ; 34 34 127 [127]
+    *+ <<            ; 34 [34] 127 255
+    ///+***+**+ <    ; [34] 165 127 0xFF
+#
+
+;; NEED POSSIBILITY TO CELL CREATON !
+;; use 4 mem cell, (you can create them and after use delete)
+;; set mem in 153 102 204 0xFF
+;;
+# create-ame-seq # 
+    0 c++ [< *+***+ >-] d >    ; 153 [?] ? ?           ; just c d use; this line eq: 0 +***+*+***+ > 
+    0 +*+***+*+* $             ; 153 102 [102] ?
+    * >                        ; 153 102 204 [?]
+    0 - <<<                    ; [153] 102 102 0xFF
+#
+
+
+# create-white-seq # 0-$$$<<< # ; hex: FF|FF|FF|FF 

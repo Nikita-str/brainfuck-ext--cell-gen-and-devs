@@ -1,0 +1,77 @@
+
+;#######################################################
+;#
+;#   SETTINGS:
+;#
+    'port-name:screen:42'
+    'dev[screen]:std-win:w=500:h=175' 
+
+
+;#######################################################
+;#
+;#   INCLUDE:
+;#
+##include/win/eng_big_char#  ; here DEFINE all "<X>" function where X is from [A..Z]
+##include/win/colors#        ; here DEFINE %create-white-seq%
+
+
+; CODE:
+
+; space is ignoring:
+> % create - white - seq % <   ; mem: 00|R|G|B|A     
+
+
+#print:ABC...#
+%<A>% %B+next-symb%
+%<B>% %B+next-symb%
+%<C>% %B+next-symb%
+%<D>% %B+next-symb%
+%<E>% %B+next-symb%
+%<F>% %B+next-symb%
+%<G>% %B+next-symb%
+%<H>% %B+next-symb%
+%<I>% %B+next-symb%
+%<J>% %B+next-symb%
+%<K>% %B+next-symb%
+%<L>% %B+next-symb%
+%<M>% %B+next-symb%
+%<N>% %B+next-symb%
+%<O>% %B+next-symb%
+%<P>% %B+next-symb%
+%<Q>% %B+next-symb%
+%<R>% %B+next-symb%
+%<S>% %B+next-symb%
+%<T>% %B+next-symb%
+%<U>% %B+next-symb%
+%<V>% %B+next-symb%
+%<W>% %B+next-symb%
+%<X>% %B+next-symb%
+%<Y>% %B+next-symb%
+%<Z>% %B+next-symb%
+#
+
+
+; if you want print alphabet only one times
+; then uncomment:
+;
+; %indent% %print:ABC...% @
+;
+; and delete rest code: 
+
+
++***+ ; out alphabet 9 times; this clearly shows coordination circylarity of std-win
+ccc
+<<<   ; AMOUNT CUR-LOOP-N CLONE-CUR-LOOP-N 0
+[
+    >
+    +$         ;   AMOUNT X=(CUR-LOOP-N + 1) X 0
+    %indent%
+    [ >%print:ABC...% %B+next-line% <- ]
+    <
+    @
+    <-         ;   AMOUNT=(AMOUNT - 1) X 0 0
+] 
+
+; ddd
+
+
