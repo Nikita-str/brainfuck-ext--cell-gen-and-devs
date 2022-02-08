@@ -7,6 +7,10 @@ use crate::bfcg::compiler::compiler_warning::CompilerWarnings;
 use crate::bfcg::compiler::dif_part_helper::setting_action::SettingActions;
 use crate::bfcg::compiler::mnc_checker::HolderChekerMNC;
 use crate::bfcg::compiler::{compiler_info::CompilerInfo, compiler_option::MemInitType};
+use crate::bfcg::dev_emulators::cem::DevStdCem;
+use crate::bfcg::dev_emulators::cem::std_cem::{DEFAULT_CEM_MM_SIZE, DEFAULT_CEM_AM_SIZE};
+use crate::bfcg::dev_emulators::com::DevStdCom;
+use crate::bfcg::dev_emulators::com::com::DEFAULT_COM_MEM_SIZE;
 use crate::bfcg::dev_emulators::dev_constructor::DevCtorOk;
 use crate::bfcg::dev_emulators::dev_name::DevName;
 use crate::bfcg::dev_emulators::std_dev::{get_std_win_dev_type, std_win_spec_constructor, StdWinDev};
@@ -47,13 +51,15 @@ pub fn gen_disasm_std(cinfo: &CompilerInfo<u8>, path: &str) -> Result<(), ()> {
 pub fn std_compile(
     path: &str,
     mem_init_type: MemInitType, 
-    checker: HolderChekerMNC, 
+    checker: Option<HolderChekerMNC>, 
     hardware_info: &HardwareInfo
 ) 
 -> Result<CompilerInfo<u8>, CompilerError> 
 {
     let mut set_act = SettingActions::new();
     SettingActions::add_std_actions(&mut set_act, mem_init_type);
+
+    let checker = if let Some(x) = checker { x } else { HolderChekerMNC::new() };
 
     let option = CompilerOption::new(
         mem_init_type,
@@ -211,6 +217,11 @@ pub fn vm_run(
             println!("!: hardware COM port was changed from {} to {}", hw_info.default_com_port, new_com_port);
             cur_port += 1;
         }
+
+        // TODO: possibility to change MEM_SIZE
+        let com = Box::new(DevStdCom::new(DEFAULT_COM_MEM_SIZE));    
+        let x = processor.add_device_boxed(com, new_com_port);
+        none_transform!(device_connecting_print(x, &DevName::new(String::from("com")), new_com_port));
     }
 
     // CEM:
@@ -220,11 +231,16 @@ pub fn vm_run(
             cur_port
         } else { hw_info.default_cem_port };
 
-        processor.hardware_change_com_port(new_cem_port);
+        processor.hardware_change_cem_port(new_cem_port);
         if new_cem_port != hw_info.default_cem_port { 
             println!("!: hardware COM port was changed from {} to {}", hw_info.default_cem_port, new_cem_port);
             cur_port += 1;
         }
+        
+        // TODO: possibility to change {A|M}M_SIZE
+        let cem = Box::new(DevStdCem::new(DEFAULT_CEM_MM_SIZE, DEFAULT_CEM_AM_SIZE));    
+        let x = processor.add_device_boxed(cem, new_cem_port);
+        none_transform!(device_connecting_print(x, &DevName::new(String::from("cem")), new_cem_port));
     }
 
     // WIN:
@@ -233,7 +249,7 @@ pub fn vm_run(
             println!("ERROR: some of win-related-device is connected but screen is not!");
             return
         }
-        assert!(win_device_type.is_empty());
+        assert!(!win_device_type.is_empty());
         assert!(win_device_type.len() == 1, "DELETE this ASSERT when realise more device (curently realised only screen and it can be only one)");
 
         // TODO: move out here: (it is analog for dev-creator)
@@ -313,8 +329,8 @@ pub struct LogisticRun<T>{
 }
 
 impl<T> LogisticRun<T>{
-    pub fn new(cinfo: CompilerInfo<T>) -> Self{
-        let (port_names, devs, program) = cinfo.decompile();
+    pub fn new(c_info: CompilerInfo<T>) -> Self{
+        let (port_names, devs, program) = c_info.decompile();
         Self { port_names, devs, program, program_taked: false }
     }
 

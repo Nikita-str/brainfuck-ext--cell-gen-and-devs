@@ -49,7 +49,7 @@ impl<'a> StdProcessor<'a> {
     ///
     /// use carefully    
     pub fn init_memory(&mut self, mem: Vec<u8>) -> Result<(), InitProcessorMemoryError> { 
-        let com_port = self.port_regs[PR_CEM];
+        let com_port = self.port_regs[PR_COM];
         if let Some(must_com) = self.devs.get_mut(&com_port) {
             if let Some(com) = must_com.to_dev_com_init() {
                 com.mem_set(mem);
@@ -312,7 +312,7 @@ impl ToString for InitProcessorMemoryError {
     fn to_string(&self) -> String {
         match self {
             Self::NoComDev => String::from("no device in com-port"),
-            Self::DevIsNotCom => String::from("device in com-port in not COM so it's memory cant be init"),
+            Self::DevIsNotCom => String::from("device in com-port is not COM so it's memory cant be init"),
         }
     }
 }

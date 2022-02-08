@@ -291,8 +291,6 @@ fn open_file(mut cur_path: Option<PathBuf>, file_name: &String) -> Option<(PathB
         Some(new_path)
     };
 
-    println!("TODO:DEL: [#2] {:?}", cur_path);
-
     let cur_path = cur_path.unwrap();
     let file_as_string = std::fs::read_to_string(&cur_path);
     if let Ok(code) = file_as_string { return Some((cur_path, code)) }

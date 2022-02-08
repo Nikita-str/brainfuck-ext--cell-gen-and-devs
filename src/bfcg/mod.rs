@@ -6,3 +6,4 @@ pub mod vm;
 pub (in super) mod general;
 
 pub mod logistics;
+pub use compiler::compiler_option::MemInitType;

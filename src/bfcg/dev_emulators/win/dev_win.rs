@@ -27,8 +27,6 @@ const PIXEL_BYTE: usize = 4; // RGBA
 impl DevWin { 
     pub fn new(win: &mut SpecialWin) -> Self { 
         let (inner, buffer) = win.create_dev_helper();
-        
-        println!("TODO:DEL: buf.len = {}", buffer.len());
 
         Self {
             inner,

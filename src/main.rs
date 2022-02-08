@@ -1,15 +1,9 @@
 
-fn main() {
-    println!(
-        "{}",
-        bf_cell_gen::bfcg::compiler::compiler
-            ::file_minimalize("++-[+ + +]0-\n42;24;1  5\nno ne++;;;;;#xx#z;;\n   #yy# w").ok().unwrap()
-    );
-    /*
-    let x = bf_cell_gen::bfcg::dev_emulators::win::Win::new(500, 200);
-    // x.run();
+//use bf_cell_gen::{logistics, MemInitType, HardwareInfo};
+use bf_cell_gen::example_run::compiler_test_u8_exmp_02;
 
-    println!("hehe ! we go !");
-    */
-    bf_cell_gen::compiler_test_u8_exmp_02();
+
+
+fn main() {
+    compiler_test_u8_exmp_02();
 }

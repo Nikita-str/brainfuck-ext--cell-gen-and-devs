@@ -13,4 +13,6 @@ pub use logistics::std_compile;
 
 pub use logistics::vm_run;
 
+pub use logistics::LogisticRun;
+
 pub use logistic_params::LogisticParams;
