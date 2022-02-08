@@ -2,11 +2,13 @@
 ##std_proof_macros#
 
 'dis-all-dev'                ; disconnect all devices
+
+'port-name:console:25'
 'dev[console]:num-console'   ; connect console that out cell value in decimal form
 
 ; [ in: {A} | out: if A != 0 {1} else {0} ]
 #z#                  ; {A}
-    c< %cloneAtoB%   ; A{A}      | let  X > 0
+    c< %cloneAtoB%>  ; A{A}      | let  X > 0
     cc<<[>+>]<       ; XX{1}0 or {0}000
     [<<[-]]          ; {0}X10 or {0}000
     >>[-<<+>>]       ; 1X{0}0 or 00{0}0

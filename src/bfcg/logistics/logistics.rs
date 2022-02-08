@@ -149,7 +149,7 @@ fn device_connecting_print(add_dev_res: Result<AddDeviceOk, AddDeviceErr>, dev_n
 
 // ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- -----
 // [=][+] GEN
-fn helper_gen_print<T>(c_info: &CompilerInfo<u8>, path: &str, path_folder: &str, name_of_gen: &str, gen_f: T) 
+fn helper_gen_print<T>(c_info: &CompilerInfo<u8>, path: &str, path_folder: &str, name_of_gen: &str, new_ext: &str, gen_f: T) 
 where T: Fn(&CompilerInfo<u8>, &str) -> Result<(), ()>
 {
     if let Err(_) = std::fs::create_dir_all(path_folder) { 
@@ -160,6 +160,7 @@ where T: Fn(&CompilerInfo<u8>, &str) -> Result<(), ()>
             if ext != EXTENSION { println!("{} generate:<WEIRD [#1] ERROR>:supposed to not happen", name_of_gen); return } 
         }
         else { path.set_extension(EXTENSION); };
+        path.set_extension(new_ext);
         if let Some(file_name) = std::path::Path::new(&path).file_name() { 
             let mut path_file = std::path::Path::new(path_folder).to_path_buf();
             path_file.push(file_name);
@@ -173,11 +174,11 @@ where T: Fn(&CompilerInfo<u8>, &str) -> Result<(), ()>
 }
 
 fn bin_gen_print(c_info: &CompilerInfo<u8>, path: &str, path_bin: &str) {
-    helper_gen_print(c_info, path, path_bin, "binary", gen_binary)
+    helper_gen_print(c_info, path, path_bin, "binary", "bin", gen_binary)
 }
 
 fn disasm_std_gen_print(c_info: &CompilerInfo<u8>, path: &str, path_disasm: &str) {
-    helper_gen_print(c_info, path, path_disasm, "disasm", gen_disasm_std)
+    helper_gen_print(c_info, path, path_disasm, "disasm", "disasm", gen_disasm_std)
 }
 // [=][-] GEN
 // ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- ----- -----
@@ -271,6 +272,7 @@ pub fn vm_run(
                     }
                     if x.is_screen() { 
                         win_port = port_num;
+                        print_win_for_test();
                         if let Ok(x) = std_win_spec_constructor(dev_name) { win = Some(x) }
                         else { panic!("must never happen") }
                         already_screen = true; 
@@ -398,12 +400,6 @@ pub fn vm_run(
     // ---------------------------------------
     // [+] RUN
     if need_run_win {
-        #[cfg(test)]
-        { 
-            println!("!!! YOU CANNOT RUN THIS AS TEST(run it from main):");
-            println!("for running this code screen is needed but #[test] is not \"main thread\" therefore it cant be run on all platforms."); 
-        }
-
         let win = win.unwrap();
         win.run(run_f); 
     } else {
@@ -411,6 +407,14 @@ pub fn vm_run(
     }
     // [-] RUN
     // ---------------------------------------
+}
+
+fn print_win_for_test(){
+    #[cfg(test)]
+    { 
+        println!("!!! YOU CANNOT RUN THIS AS TEST(run it from main):");
+        println!("for running this code screen is needed but #[test] is not \"main thread\" therefore it cant be run on all platforms."); 
+    }
 }
 
 // [-] RUN VM
@@ -444,7 +448,7 @@ impl<T> LogisticRun<T>{
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 pub fn main_logistics(x: &LogisticParams) {
-    let path = &x.file; 
+    let path = x.get_file(); 
 
     let hw_info = HardwareInfo::from_logistic_params(x);
     

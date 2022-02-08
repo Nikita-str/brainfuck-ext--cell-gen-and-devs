@@ -2,8 +2,7 @@
 use bf_cell_gen::{logistics, LogisticParams};
 use clap::StructOpt;
 
-// 
-// use bf_cell_gen::example_run::compiler_test_u8_exmp_02;
+// use bf_cell_gen::example_run;
 
 
 fn main() {

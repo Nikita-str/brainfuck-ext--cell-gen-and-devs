@@ -6,7 +6,8 @@
 ; you may test others program with change 0 into %0%:
 
 'dis-all-dev'              ; disconnect all devices
-'dev[console]:num-console'   ; connect console that out cell value in decimal form
+'port-name:console:12'
+'dev[console]:num-console:new-line=2'   ; connect console that out cell value in decimal form
 
 +++>+ %0% < %0% .>. 
 ,. %0% .

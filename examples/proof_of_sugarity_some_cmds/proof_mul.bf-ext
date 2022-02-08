@@ -1,7 +1,7 @@
 
 ##std_proof_macros#
 
-'port-name:console:25' ; TODO:DEL: auto console port (we can change but auto is ok)
+'port-name:console:25'
 
 'dis-all-dev'                ; disconnect all devices
 'dev[console]:num-console'   ; connect console that out cell value in decimal form
