@@ -2,9 +2,9 @@ use std::collections::LinkedList;
 
 use crate::{bfcg::dev_emulators::dev::Dev, 
     dev_std_precheck_write_byte, dev_std_precheck_read_byte, 
-    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_no_param_impl
+    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_one_param_impl
 };
-use super::console_inner::ConsoleInner;
+use super::console_inner::{ConsoleInner, PrivateConsoleNeedWrite, DEFAULT_NEED_WRITE_STATE};
 
 pub struct DevConsoleUtf8 {
     readed_buffer: LinkedList<u8>,
@@ -18,14 +18,14 @@ pub struct DevConsoleUtf8 {
 }
 
 impl DevConsoleUtf8{
-    pub fn new() -> Self {
+    fn new(need_write_state: PrivateConsoleNeedWrite) -> Self {
         Self {
             readed_buffer: LinkedList::new(),
 
             writed_buffer: Vec::new(),
             write_len: 0,
 
-            inner: ConsoleInner::new(),
+            inner: ConsoleInner::new(need_write_state),
             error: false,
             infinity: false,
         }
@@ -90,5 +90,4 @@ impl Dev for DevConsoleUtf8 {
 }
 impl crate::bfcg::dev_emulators::dev::ToDevComInit for DevConsoleUtf8 {}
 
-
-dev_ctor_no_param_impl!(DevConsoleUtf8);
+dev_ctor_one_param_impl!(DevConsoleUtf8, "print-state", DEFAULT_NEED_WRITE_STATE);

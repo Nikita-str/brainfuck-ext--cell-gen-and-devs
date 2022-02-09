@@ -1,9 +1,8 @@
 use crate::{bfcg::dev_emulators::dev::Dev, 
     dev_std_precheck_write_byte, dev_std_precheck_read_byte, 
-    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_one_param_impl
+    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_two_param_impl
 };
-use super::console_inner::ConsoleInner;
-
+use super::console_inner::{ConsoleInner, PrivateConsoleNeedWrite, DEFAULT_NEED_WRITE_STATE};
 
 pub struct DevConsoleNum{
     /// how frequently write '\n'
@@ -18,12 +17,12 @@ pub struct DevConsoleNum{
 
 
 impl DevConsoleNum{
-    pub fn new(new_line_freq: usize) -> Self {
+    fn new(new_line_freq: usize, need_write_state: PrivateConsoleNeedWrite) -> Self {
         Self {
             new_line_freq,
             writed_on_cur_line: 0,
 
-            inner: ConsoleInner::new(),
+            inner: ConsoleInner::new(need_write_state),
             error: false,
             infinity: false,
         }
@@ -37,6 +36,8 @@ const MAX_BYTE_LEN:i32 = 3;  // "255" is max byte and it char-len is 3
 impl Dev for DevConsoleNum {
     fn read_byte(&mut self) -> u8 {
         dev_std_precheck_read_byte!(self, DEFAULT);
+
+        if self.inner.need_write_state() { self.writed_on_cur_line = 0; }
 
         let mut len = 0;
         let mut num:u32 = 0;
@@ -67,16 +68,17 @@ impl Dev for DevConsoleNum {
     fn write_byte(&mut self, byte: u8) {
         dev_std_precheck_write_byte!(self);
 
-        for x in byte.to_string().chars() { self.inner.write_char(x); }
-        self.inner.write_char(' ');
-
         if self.new_line_freq != 0 {
-            self.writed_on_cur_line += 1;
             if self.writed_on_cur_line == self.new_line_freq {
                 self.inner.write_char('\n');
                 self.writed_on_cur_line = 0;
             }
+            self.writed_on_cur_line += 1;
         }
+
+        for x in byte.to_string().chars() { self.inner.write_char(x); }
+        self.inner.write_char(' ');
+
     }
 
     fn test_can_read_byte(&self) -> bool {
@@ -91,4 +93,4 @@ impl crate::bfcg::dev_emulators::dev::ToDevComInit for DevConsoleNum {}
 
 
 const DEFAULT_NEW_LINE_FREQ: usize = 10;
-dev_ctor_one_param_impl!(DevConsoleNum, "new-line", DEFAULT_NEW_LINE_FREQ);
+dev_ctor_two_param_impl!(DevConsoleNum ["new-line", DEFAULT_NEW_LINE_FREQ] ["print-state", DEFAULT_NEED_WRITE_STATE]);

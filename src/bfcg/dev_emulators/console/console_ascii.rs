@@ -1,8 +1,8 @@
 use crate::{bfcg::dev_emulators::dev::Dev, 
     dev_std_precheck_write_byte, dev_std_precheck_read_byte, 
-    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_no_param_impl
+    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_one_param_impl
 };
-use super::console_inner::ConsoleInner;
+use super::console_inner::{ConsoleInner, PrivateConsoleNeedWrite, DEFAULT_NEED_WRITE_STATE};
 
 pub struct DevConsoleAscii{
     inner: ConsoleInner,
@@ -11,9 +11,9 @@ pub struct DevConsoleAscii{
 }
 
 impl DevConsoleAscii {
-    pub fn new() -> Self{
+    fn new(need_write_state: PrivateConsoleNeedWrite) -> Self{
         Self{ 
-            inner: ConsoleInner::new(),
+            inner: ConsoleInner::new(need_write_state),
             error: false,
             infinity: false,
         }
@@ -54,5 +54,5 @@ impl Dev for DevConsoleAscii {
 }
 impl crate::bfcg::dev_emulators::dev::ToDevComInit for DevConsoleAscii {}
 
+dev_ctor_one_param_impl!(DevConsoleAscii, "print-state", DEFAULT_NEED_WRITE_STATE);
 
-dev_ctor_no_param_impl!(DevConsoleAscii);

@@ -9,7 +9,7 @@
 
 'dis-all-dev'                ; disconnect all devices
 'port-name:console:25'
-'dev[console]:num-console:new-line=1'   ; connect console that out cell value in decimal form
+'dev[console]:num-console:new-line=5:print-state=+'   ; connect console that out cell value in decimal form
 
 
 ; [ in: {A} | out: if A != 0 {1} else {0} ]

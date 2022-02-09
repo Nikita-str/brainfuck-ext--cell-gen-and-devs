@@ -178,5 +178,25 @@ macro_rules! dev_ctor_one_param_impl {
     };
 }
 
+#[macro_export]
+macro_rules! dev_ctor_two_param_impl {
+    ($dev_type: ty [$await_name_1:expr, $default_1:ident] [$await_name_2:expr, $default_2:ident]) => {
+        impl crate::bfcg::dev_emulators::dev_constructor::DevCtor for $dev_type {
+            fn dev_ctor(dev_name_params: &std::collections::HashMap<String, String>) 
+            -> Result<crate::bfcg::dev_emulators::dev_constructor::DevCtorOk, 
+                      crate::bfcg::dev_emulators::dev_constructor::DevCtorErr> 
+            {
+                let mut helper = crate::bfcg::dev_emulators::dev_constructor::DevCtorHelper::new(dev_name_params);
+
+                let x = crate::dev_ctor_parse_unwrap!(helper, $await_name_1, $default_1);
+                let y = crate::dev_ctor_parse_unwrap!(helper, $await_name_2, $default_2);
+                helper.add_unused_warn();
+                let warns = helper.take_warn();
+        
+                Ok(crate::bfcg::dev_emulators::dev_constructor::DevCtorOk::new(Box::new(<$dev_type>::new(x, y)), warns))
+            }
+        }
+    };
+}
 // [-] MACROS
 //------------------------------------------------------------------------
