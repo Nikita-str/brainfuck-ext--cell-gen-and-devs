@@ -1,6 +1,6 @@
 use crate::{bfcg::dev_emulators::dev::Dev, 
     dev_std_precheck_write_byte, dev_std_precheck_read_byte, 
-    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_two_param_impl
+    dev_std_realise_in_inf, dev_std_realise_have_error, 
 };
 use super::console_inner::{ConsoleInner, PrivateConsoleNeedWrite, DEFAULT_NEED_WRITE_STATE};
 
@@ -93,4 +93,4 @@ impl crate::bfcg::dev_emulators::dev::ToDevComInit for DevConsoleNum {}
 
 
 const DEFAULT_NEW_LINE_FREQ: usize = 10;
-dev_ctor_two_param_impl!(DevConsoleNum ["new-line", DEFAULT_NEW_LINE_FREQ] ["print-state", DEFAULT_NEED_WRITE_STATE]);
+crate::dev_ctor_impl!(DevConsoleNum ["new-line", DEFAULT_NEW_LINE_FREQ] ["print-state", DEFAULT_NEED_WRITE_STATE]);

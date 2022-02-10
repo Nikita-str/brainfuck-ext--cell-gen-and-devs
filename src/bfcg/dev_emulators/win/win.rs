@@ -447,6 +447,8 @@ const DEFAULT_H:u32 = 220;
 const DEFAULT_X:u32 = 300;
 const DEFAULT_Y:u32 = 300;
 
+const DEFAULT_WIN_POS: PrivateSpecialWinPos = PrivateSpecialWinPos{x: DEFAULT_X, y: DEFAULT_Y};
+
 struct PrivateSpecialWinPos{ pub x: u32, pub y: u32 }
 
 impl std::str::FromStr for PrivateSpecialWinPos {
@@ -470,9 +472,7 @@ impl SpecialWinCtor for SpecialWin {
 
         let w = dev_ctor_parse_unwrap!(helper, "w", DEFAULT_W);
         let h = dev_ctor_parse_unwrap!(helper, "h", DEFAULT_H);
-
-        let default = PrivateSpecialWinPos{x: DEFAULT_X, y: DEFAULT_Y};
-        let pos = dev_ctor_parse_unwrap!(helper, "x+y", default);
+        let pos = dev_ctor_parse_unwrap!(helper, "x+y", DEFAULT_WIN_POS);
 
         Ok(Win::new_all(w, h, (pos.x, pos.y)))
     }

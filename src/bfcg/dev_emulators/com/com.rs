@@ -2,12 +2,11 @@ use crate::{bfcg::
     {
         dev_emulators::{
             dev::{Dev, ToDevComInit, DevComInit}, dev_utilities::mem_dev::CmdMemDevStartAction, 
-            dev_constructor::{DevCtorOk, DevCtorErr, DevCtorHelper, DevCtor}
         }, 
         general::se_fn::{MIN_BIG_BYTE, std_se_decoding}
     }, 
     dev_std_precheck_write_byte, dev_std_precheck_read_byte, 
-    dev_std_realise_in_inf, dev_std_realise_have_error, dev_ctor_parse_unwrap
+    dev_std_realise_in_inf, dev_std_realise_have_error,
 };
 use super::com_inner::ComInner;
 
@@ -170,18 +169,6 @@ impl DevComInit for DevStdCom {
 // -------------------------------------------------
 // [-] DEV CTOR
 pub const DEFAULT_COM_MEM_SIZE: usize = 0x10_00_00; // 1 MB
-
-impl DevCtor for DevStdCom {
-    fn dev_ctor(dev_name_params: &std::collections::HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr> {
-        let mut helper = DevCtorHelper::new(dev_name_params);
-
-        let mem_size = dev_ctor_parse_unwrap!(helper, "mem-sz", DEFAULT_COM_MEM_SIZE);
-    
-        helper.add_unused_warn();
-        let warns = helper.take_warn();
-
-        Ok(DevCtorOk::new(Box::new(DevStdCom::new(mem_size)), warns))
-    }
-}
+crate::dev_ctor_impl!(DevStdCom ["mem-sz", DEFAULT_COM_MEM_SIZE]);
 // [-] DEV CTOR
 // -------------------------------------------------

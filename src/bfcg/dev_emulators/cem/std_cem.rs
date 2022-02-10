@@ -2,9 +2,8 @@ use crate::{
     bfcg::dev_emulators::{
         dev::{Dev, ToDevComInit}, 
         dev_utilities::mem_dev::CellMemDevStartAction, 
-        dev_constructor::{DevCtor, DevCtorErr, DevCtorHelper, DevCtorOk},
     }, 
-    dev_std_precheck_read_byte, dev_std_precheck_write_byte, dev_ctor_parse_unwrap
+    dev_std_precheck_read_byte, dev_std_precheck_write_byte,
 };
 
 use super::cem_inner::{CemInner};
@@ -146,18 +145,7 @@ impl ToDevComInit for DevStdCem {}
 pub const DEFAULT_CEM_MM_SIZE:usize = 0x10000;
 pub const DEFAULT_CEM_AM_SIZE:usize = 0x10000;
 
-impl DevCtor for DevStdCem {
-    fn dev_ctor(dev_name_params: &std::collections::HashMap<String, String>) -> Result<DevCtorOk, DevCtorErr> {
-        let mut helper = DevCtorHelper::new(dev_name_params);
-        let mm_size = dev_ctor_parse_unwrap!(helper, "mm-sz", DEFAULT_CEM_MM_SIZE);
-        let am_size = dev_ctor_parse_unwrap!(helper, "am-sz", DEFAULT_CEM_AM_SIZE);
-        
-        helper.add_unused_warn();
-        let warns = helper.take_warn();
-
-        Ok(DevCtorOk::new(Box::new(DevStdCem::new(mm_size, am_size)), warns))
-    }
-}
+crate::dev_ctor_impl!(DevStdCem ["mm-sz", DEFAULT_CEM_MM_SIZE] ["am-sz", DEFAULT_CEM_AM_SIZE]);
 // [-] DEV CTOR
 // -----------------------------------------------
 
