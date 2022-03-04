@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
-use std::str::Chars;
 
 use crate::bfcg::compiler::dif_part_helper::settings::Setting;
 use crate::bfcg::general::EXTENSION;
+use crate::bfcg::iter_with_back::{BackwardMove, IterWithAutoBackN};
 
 use super::comand_compiler::{CmdCompiler, PortNameHandler};
 use super::compiler_error::{CompilerError};
@@ -48,13 +48,19 @@ pub fn file_minimalize(str: &str) -> Result<String, ()>{
 // ---------------------------------------------------------------------
 // (inner) STRUCT: 
 
-struct InnerCompilerParam<'a>{
-    chars: Chars<'a>,
+struct InnerCompilerParam<CharsWithBack>
+where 
+    CharsWithBack: Iterator<Item = char> + BackwardMove,
+{
+    chars: CharsWithBack,
     pos: CompilerPos,
 }
 
-impl<'a> InnerCompilerParam<'a>{
-    pub fn new(chars: Chars<'a>) -> Self{ 
+impl<CharsWithBack> InnerCompilerParam<CharsWithBack>
+where
+    CharsWithBack: Iterator<Item = char> + BackwardMove,
+{
+    pub fn new(chars: CharsWithBack) -> Self{ 
         Self {
             chars,
             pos: CompilerPos::new(),
@@ -66,6 +72,8 @@ impl<'a> InnerCompilerParam<'a>{
         self.pos.maybe_add_char(c);
         c
     }
+
+    pub fn back(&mut self) { self.chars.back() }
 
     pub fn get_pos(&self) -> CompilerPos { self.pos.clone() }
 }
@@ -84,7 +92,10 @@ type CE = CompilerError;
 // ---------------------------------------------------------------------
 // USEFUL FNs: 
 
-fn skip_line(param: &mut InnerCompilerParam){
+fn skip_line<C>(param: &mut InnerCompilerParam<C>)
+where 
+    C: Iterator<Item = char> + BackwardMove,
+{
     loop {
         match param.next() {
             Some(super::compiler::NEXT_LINE) | None => break,
@@ -93,9 +104,12 @@ fn skip_line(param: &mut InnerCompilerParam){
     }
 }
 
-fn parse_until_char(param: &mut InnerCompilerParam, first_char: Option<char>, until_char: char) -> Option<String>{
+fn parse_until_char<C>(param: &mut InnerCompilerParam<C>, until_char: char) -> Option<String>
+where 
+    C: Iterator<Item = char> + BackwardMove,
+{
     let mut ret_str = String::new();
-    if let Some(x) = first_char { ret_str.push(x); }
+
     loop {
         match param.next() {
             None => { return None }
@@ -145,8 +159,11 @@ impl SharpParse{
         }
     }
 
-    fn parse_until_sharp(param: &mut InnerCompilerParam, first_char: Option<char>) -> SharpParse{
-        let ret_str = parse_until_char(param, first_char, super::compiler::SHARP);
+    fn parse_until_sharp<C>(param: &mut InnerCompilerParam<C>) -> SharpParse
+    where 
+        C: Iterator<Item = char> + BackwardMove,
+    {
+        let ret_str = parse_until_char(param, super::compiler::SHARP);
         if let None = ret_str { return SharpParse::UnexpectedEOF }
 
         let ret_str = ret_str.unwrap();
@@ -154,7 +171,10 @@ impl SharpParse{
         else { SharpParse::Temp(ret_str) }
     }
 
-    fn parse_sharp(param: &mut InnerCompilerParam, can_compile: CanCompile) -> SharpParse{
+    fn parse_sharp<C>(param: &mut InnerCompilerParam<C>, can_compile: CanCompile) -> SharpParse
+    where 
+        C: Iterator<Item = char> + BackwardMove,
+    {
         let c;
         loop {
             match param.next() {
@@ -168,24 +188,25 @@ impl SharpParse{
         let c = c.unwrap(); // must always ok; but if in loop exist algo error => exception
 
         if c == super::compiler::SHARP { 
-            let to_sharp = Self::parse_until_sharp(param, None);
+            let to_sharp = Self::parse_until_sharp(param);
             if to_sharp.is_error() { return to_sharp }
 
             let to_sharp = to_sharp.temp_to_string().unwrap();
             if to_sharp == "!" {
                 if !can_compile.can_compile_macro() { return SharpParse::CantCompileMacro }
                 if !can_compile.can_compile_settings() { return SharpParse::CantCompileSetting }
-                return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::MacroAndSettings) 
+                return SharpParse::to_file_include(Self::parse_until_sharp(param), CanCompile::MacroAndSettings) 
             }
             if to_sharp == "'" { 
                 if !can_compile.can_compile_settings() { return SharpParse::CantCompileSetting }
-                return SharpParse::to_file_include(Self::parse_until_sharp(param, None), CanCompile::OnlySettings) 
+                return SharpParse::to_file_include(Self::parse_until_sharp(param), CanCompile::OnlySettings) 
             }
             if !can_compile.can_compile_macro() { return SharpParse::CantCompileMacro }
             return SharpParse::FileInclude(to_sharp, CanCompile::OnlyMacros)
         }
-            
-        let macro_name = Self::parse_until_sharp(param, Some(c));
+
+        param.back();
+        let macro_name = Self::parse_until_sharp(param);
         let macro_name =
         if !macro_name.is_temp() { return macro_name } 
         else { macro_name.temp_to_string().unwrap() };
@@ -193,7 +214,7 @@ impl SharpParse{
             return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) 
         }
 
-        let macro_cmds = Self::parse_until_sharp(param, None);
+        let macro_cmds = Self::parse_until_sharp(param);
         let macro_cmds =
         if !macro_cmds.is_temp() { return macro_cmds } 
         else { macro_cmds.temp_to_string().unwrap() };
@@ -320,7 +341,7 @@ where CC: CmdCompiler<T> + PortNameHandler,
     };
     let chars = code.chars();
 
-    let mut param = InnerCompilerParam::new(chars);
+    let mut param = InnerCompilerParam::new(IterWithAutoBackN::<_, _, 1>::new(chars));
 
     if option.need_processed_default_settings() {
         compile_check_error_compile_settings!(option, param, file_name);
@@ -404,7 +425,7 @@ where CC: CmdCompiler<T> + PortNameHandler,
             Some(super::compiler::SETTINGS_CHAR) => {
                 compile_check_error_compile_settings!(option, param, file_name);
 
-                let setting = parse_until_char(&mut param, None, super::compiler::SETTINGS_CHAR);
+                let setting = parse_until_char(&mut param, super::compiler::SETTINGS_CHAR);
                 let setting_string = 
                     if let Some(setting) = setting { setting } 
                     else { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) };
@@ -421,7 +442,7 @@ where CC: CmdCompiler<T> + PortNameHandler,
                 // & compile mem init if need
                 compile_mem_init_if_need!(option, param, file_name, ret);
                 
-                let macros_name = parse_until_char(&mut param, None, super::compiler::MACRO_USE_CHAR);
+                let macros_name = parse_until_char(&mut param, super::compiler::MACRO_USE_CHAR);
                 if let Some(macros_name) = macros_name {
                     let macros_code = ret.get_macros_code(&macros_name);
                     if macros_code.is_none() { 
