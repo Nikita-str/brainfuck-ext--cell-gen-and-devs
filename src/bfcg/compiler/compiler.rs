@@ -73,7 +73,10 @@ where
         c
     }
 
-    pub fn back(&mut self) { self.chars.back() }
+    pub fn back(&mut self) {
+        self.pos.pos_back(); 
+        self.chars.back() 
+    }
 
     pub fn get_pos(&self) -> CompilerPos { self.pos.clone() }
 }
@@ -433,36 +436,34 @@ where CC: CmdCompiler<T> + PortNameHandler,
                 compile_prepare_setting!(option, param, file_name, ret, setting_string);
             }
 
-            Some(_) if !option.can_compile_code() => {
-                return Err(CE::new_cant_compile_code(param.get_pos(), file_name)) 
-            }
-
-            Some(super::compiler::MACRO_USE_CHAR) => {
-                // say that code started (even if used macro was empty (cause it is potential error))
-                // & compile mem init if need
-                compile_mem_init_if_need!(option, param, file_name, ret);
-                
-                let macros_name = parse_until_char(&mut param, super::compiler::MACRO_USE_CHAR);
-                if let Some(macros_name) = macros_name {
-                    let macros_code = ret.get_macros_code(&macros_name);
-                    if macros_code.is_none() { 
-                        return Err(CE::new_unknown_macros(param.get_pos(), file_name, macros_name)) 
-                    } else {
-                        let macros_code = macros_code.unwrap();
-                        let cc = option.cmd_compiler.as_mut().unwrap();
-                        compile_seq_cmd!(param, file_name, macros_code, cc);
-                    }
-                } else {
-                    return Err(CE::new_unexp_eof(param.get_pos(), file_name))
-                }
-            }
-
+            // ELSE: real code
             Some(c) => {
+                if !option.can_compile_code() { return Err(CE::new_cant_compile_code(param.get_pos(), file_name)) }
+
                 // say that code started & compile mem init if need
                 compile_mem_init_if_need!(option, param, file_name, ret);
 
-                let cc = option.cmd_compiler.as_mut().unwrap();
-                compile_one_cmd!(param, file_name, c, cc);
+                //currently real code is or `MACRO_USE` or `CMD`
+                match c {
+                    // `MACRO_USE`
+                    super::compiler::MACRO_USE_CHAR => {
+                        let macros_name = parse_until_char(&mut param, super::compiler::MACRO_USE_CHAR);
+                        if macros_name.is_none() { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) }
+                        let macros_name = macros_name.unwrap();
+                        
+                        let macros_code = ret.get_macros_code(&macros_name);
+                        if macros_code.is_none() { return Err(CE::new_unknown_macros(param.get_pos(), file_name, macros_name)) } 
+                        let macros_code = macros_code.unwrap();
+                        
+                        let cc = option.cmd_compiler.as_mut().unwrap();
+                        compile_seq_cmd!(param, file_name, macros_code, cc);
+                    }
+                    // `CMD`
+                    c => {
+                        let cc = option.cmd_compiler.as_mut().unwrap();
+                        compile_one_cmd!(param, file_name, c, cc);      
+                    }
+                }
             }
         }
     }
