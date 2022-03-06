@@ -40,6 +40,9 @@ pub enum CompilerErrorType{
 
     MacroNameCheckError{rule_checker_name: String, error: ChekerErrorMNC},
 
+    /// if None => EOF; if Some(c) => any char except MACRO_USE_CHAR
+    ExpectedSpaceSeparatedSeq(Option<char>),
+
     Other(String),
 }
 
@@ -62,11 +65,10 @@ macro_rules! new_ce_2p {
 }
 
 macro_rules! new_ce_3p {
-    ( $ind:ident, $err_type:expr, $add_param_type:ident ) => {
+    ( $ind:ident, $err_type:expr, $add_param_type:ty ) => {
         pub fn $ind(pos: CompilerPos, file_name: String, x: $add_param_type) -> Self { Self::new($err_type (x), pos, file_name) }
     };
 }
-
 
 type CET = CompilerErrorType;
 
@@ -83,6 +85,7 @@ impl CompilerError{
     new_ce_3p!(new_bad_macro_name, CET::BadMacroName, char);
     new_ce_3p!(new_setting_error, CET::SettingError, ErrorSetting);
     new_ce_3p!(new_include_error, CET::IncludeError, IncludeError);
+    new_ce_3p!(new_expect_space_sep, CET::ExpectedSpaceSeparatedSeq, Option<char>);
 
     pub fn new_setting_action_error(pos: CompilerPos, file_name: String, error: SettingActionResult, in_setting: String) -> Self {
         if error.is_right_rule() { panic!("it is not error!") } 
@@ -178,6 +181,16 @@ impl ToString for CompilerErrorType {
                 let mut ret = format!("in setting \"{}\":", setting);
                 ret += &err.result_type.to_string().replace("\n", &("\n".to_owned() + PAD));
                 ret
+            }
+
+            Self::ExpectedSpaceSeparatedSeq(c) => {
+                match *c {
+                    None => format!("unexpected end of file (EOF): expected space-separated-macro-use sequence (%%%)"),
+                    Some(c) => {
+                        let c = if c.is_whitespace() { ' ' } else { c };
+                        format!("unexpected char '{c}': expected space-separated-macro-use sequence (%%%) but instead was \"%{c}\" or \"%%{c}\"")
+                    }
+                }
             }
 
             Self::Other(x) => String::from(x),

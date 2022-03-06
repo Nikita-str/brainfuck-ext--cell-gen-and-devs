@@ -48,7 +48,7 @@ pub fn file_minimalize(str: &str) -> Result<String, ()>{
 // ---------------------------------------------------------------------
 // (inner) STRUCT: 
 
-struct InnerCompilerParam<CharsWithBack>
+struct CompilerParser<CharsWithBack>
 where 
     CharsWithBack: Iterator<Item = char> + BackwardMove,
 {
@@ -56,7 +56,8 @@ where
     pos: CompilerPos,
 }
 
-impl<CharsWithBack> InnerCompilerParam<CharsWithBack>
+// default fns:
+impl<CharsWithBack> CompilerParser<CharsWithBack>
 where
     CharsWithBack: Iterator<Item = char> + BackwardMove,
 {
@@ -81,6 +82,49 @@ where
     pub fn get_pos(&self) -> CompilerPos { self.pos.clone() }
 }
 
+// ---   ---   ---   ---   ---   --- 
+// useful fns: read/skip/await
+impl<CharsWithBack> CompilerParser<CharsWithBack>
+where
+    CharsWithBack: Iterator<Item = char> + BackwardMove,
+{
+    /// await `amount` `'%'` in a row
+    pub fn await_sss_char(&mut self, amount: usize, file_name: &str) -> Result<(), CE> {
+        for _ in 0..amount {
+            match self.next() {
+                Some(super::compiler::MACRO_USE_CHAR) => {}
+                x => { return Err(CE::new_expect_space_sep(self.get_pos(), String::from(file_name), x)) } // AWAITED `%%%`
+            }
+        }
+        Ok(())
+    }
+
+    fn skip_line(&mut self) {
+        loop {
+            match self.next() {
+                Some(super::compiler::NEXT_LINE) | None => break,
+                _ => {}
+            }
+        }
+    }
+
+    fn parse_until_char(&mut self, until_char: char) -> Option<String> {
+        let mut ret_str = String::new();
+
+        loop {
+            match self.next() {
+                None => { return None }
+                Some(super::compiler::COMMENT_LINE) => self.skip_line(),
+                Some(c) if c == until_char => { break },
+                Some(c) if c.is_whitespace() => { },
+                Some(c) => { ret_str.push(c); },
+            };
+        }
+        
+        Some(ret_str)
+    }
+}
+
 // ---------------------------------------------------------------------
 // CONSTS: 
 
@@ -92,38 +136,45 @@ pub(super) const SHARP: char = '#';
 
 type CE = CompilerError;
 
-// ---------------------------------------------------------------------
-// USEFUL FNs: 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PARSER OF "%%% ... %%%": 
+//
+// sss means space-separated-sequence: `%%%`
+//
+// general form:
+// <%%%>[<possible-space><possible-names>]*<possible-space><%%%>
 
-fn skip_line<C>(param: &mut InnerCompilerParam<C>)
-where 
-    C: Iterator<Item = char> + BackwardMove,
-{
-    loop {
-        match param.next() {
-            Some(super::compiler::NEXT_LINE) | None => break,
-            _ => {}
-        }
-    }
+enum ParseNextNameSSS {
+    EOF,
+    WhiteSpace(String),
+    StartOfEndSeq(Option<String>),
 }
 
-fn parse_until_char<C>(param: &mut InnerCompilerParam<C>, until_char: char) -> Option<String>
-where 
-    C: Iterator<Item = char> + BackwardMove,
+impl<CharsWithBack> CompilerParser<CharsWithBack>
+where
+    CharsWithBack: Iterator<Item = char> + BackwardMove,
 {
-    let mut ret_str = String::new();
+    fn parse_sss_next_name(&mut self) -> ParseNextNameSSS {
+        let mut ret_str = String::new();
 
-    loop {
-        match param.next() {
-            None => { return None }
-            Some(super::compiler::COMMENT_LINE) => skip_line(param),
-            Some(c) if c == until_char => { break },
-            Some(c) if c.is_whitespace() => { },
-            Some(c) => { ret_str.push(c); },
-        };
+        loop {
+            match self.next() {
+                None => { return ParseNextNameSSS::EOF }
+                Some(super::compiler::COMMENT_LINE) => {
+                    self.skip_line();
+                    if !ret_str.is_empty() { return ParseNextNameSSS::WhiteSpace(ret_str) }
+                }
+                Some(c) if c.is_whitespace() => {
+                    if !ret_str.is_empty() { return ParseNextNameSSS::WhiteSpace(ret_str) }
+                }
+                Some(super::compiler::MACRO_USE_CHAR) => {
+                    let ret = if !ret_str.is_empty() { Some(ret_str) } else { None };
+                    return ParseNextNameSSS::StartOfEndSeq(ret)
+                }
+                Some(c) => { ret_str.push(c); }
+            };
+        }    
     }
-    
-    Some(ret_str)
 }
 
 // ---------------------------------------------------------------------
@@ -162,11 +213,11 @@ impl SharpParse{
         }
     }
 
-    fn parse_until_sharp<C>(param: &mut InnerCompilerParam<C>) -> SharpParse
+    fn parse_until_sharp<C>(parser: &mut CompilerParser<C>) -> SharpParse
     where 
         C: Iterator<Item = char> + BackwardMove,
     {
-        let ret_str = parse_until_char(param, super::compiler::SHARP);
+        let ret_str = parser.parse_until_char(super::compiler::SHARP);
         if let None = ret_str { return SharpParse::UnexpectedEOF }
 
         let ret_str = ret_str.unwrap();
@@ -174,15 +225,15 @@ impl SharpParse{
         else { SharpParse::Temp(ret_str) }
     }
 
-    fn parse_sharp<C>(param: &mut InnerCompilerParam<C>, can_compile: CanCompile) -> SharpParse
+    fn parse_sharp<C>(parser: &mut CompilerParser<C>, can_compile: CanCompile) -> SharpParse
     where 
         C: Iterator<Item = char> + BackwardMove,
     {
         let c;
         loop {
-            match param.next() {
+            match parser.next() {
                 None => { return SharpParse::UnexpectedEOF }
-                Some(super::compiler::COMMENT_LINE) => { skip_line(param) },
+                Some(super::compiler::COMMENT_LINE) => { parser.skip_line() },
                 Some(super::compiler::MACRO_USE_CHAR) => { return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) },
                 Some(c) if c.is_whitespace() => { },
                 Some(ok) => { c = Some(ok); break },
@@ -190,26 +241,28 @@ impl SharpParse{
         }
         let c = c.unwrap(); // must always ok; but if in loop exist algo error => exception
 
+        // INCLUDE:
         if c == super::compiler::SHARP { 
-            let to_sharp = Self::parse_until_sharp(param);
+            let to_sharp = Self::parse_until_sharp(parser);
             if to_sharp.is_error() { return to_sharp }
 
             let to_sharp = to_sharp.temp_to_string().unwrap();
             if to_sharp == "!" {
                 if !can_compile.can_compile_macro() { return SharpParse::CantCompileMacro }
                 if !can_compile.can_compile_settings() { return SharpParse::CantCompileSetting }
-                return SharpParse::to_file_include(Self::parse_until_sharp(param), CanCompile::MacroAndSettings) 
+                return SharpParse::to_file_include(Self::parse_until_sharp(parser), CanCompile::MacroAndSettings) 
             }
             if to_sharp == "'" { 
                 if !can_compile.can_compile_settings() { return SharpParse::CantCompileSetting }
-                return SharpParse::to_file_include(Self::parse_until_sharp(param), CanCompile::OnlySettings) 
+                return SharpParse::to_file_include(Self::parse_until_sharp(parser), CanCompile::OnlySettings) 
             }
             if !can_compile.can_compile_macro() { return SharpParse::CantCompileMacro }
             return SharpParse::FileInclude(to_sharp, CanCompile::OnlyMacros)
         }
 
-        param.back();
-        let macro_name = Self::parse_until_sharp(param);
+        // MACROS DEFINITION:
+        parser.back();
+        let macro_name = Self::parse_until_sharp(parser);
         let macro_name =
         if !macro_name.is_temp() { return macro_name } 
         else { macro_name.temp_to_string().unwrap() };
@@ -217,7 +270,7 @@ impl SharpParse{
             return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) 
         }
 
-        let macro_cmds = Self::parse_until_sharp(param);
+        let macro_cmds = Self::parse_until_sharp(parser);
         let macro_cmds =
         if !macro_cmds.is_temp() { return macro_cmds } 
         else { macro_cmds.temp_to_string().unwrap() };
@@ -229,23 +282,27 @@ impl SharpParse{
 // ---------------------------------------------------------------------
 // MACROS: 
 
+macro_rules! ok_or_ret {
+    ($x:expr) => { if let Err(err) = $x { return Err(err) } };
+}
+
 macro_rules! compile_check_error_compile_settings {
-    ( $option:ident, $param:ident, $file_name:ident ) => {
+    ( $option:ident, $parser:ident, $file_name:ident ) => {
         if ! $option.can_compile_settings() {
-            return Err(CE::new_cant_compile_settings($param.get_pos(), $file_name)) 
+            return Err(CE::new_cant_compile_settings($parser.get_pos(), $file_name)) 
         }
     }
 }
 
 macro_rules! compile_prepare_setting {
-    ( $option:ident, $param:ident, $file_name:ident, $ret:ident, $setting_string:ident ) => {
+    ( $option:ident, $parser:ident, $file_name:ident, $ret:ident, $setting_string:ident ) => {
         match Setting::prepare_settings(& $setting_string) {
-            Err(error) => return Err(CE::new_setting_error($param.get_pos(), $file_name, error)),
+            Err(error) => return Err(CE::new_setting_error($parser.get_pos(), $file_name, error)),
             Ok(setting) => {
                 let sa_res = $option.setting_action.make_setting_action(&setting, &mut $ret);
 
                 if !sa_res.is_right_rule() {
-                    return Err(CE::new_setting_action_error($param.get_pos(), $file_name, sa_res, $setting_string))
+                    return Err(CE::new_setting_action_error($parser.get_pos(), $file_name, sa_res, $setting_string))
                 }
 
                 if sa_res.parent_must_process() { $ret.add_setting_for_parent(setting) }
@@ -253,7 +310,7 @@ macro_rules! compile_prepare_setting {
                 if let Some(warnings) = sa_res.get_warinings() {
                     for warning in warnings {
                         $ret.add_warning(
-                            CompilerWarning::SettingWarning{pos: $param.get_pos(), setting: $setting_string.clone(), warning}
+                            CompilerWarning::SettingWarning{pos: $parser.get_pos(), setting: $setting_string.clone(), warning}
                         );
                     }
                 }
@@ -263,28 +320,69 @@ macro_rules! compile_prepare_setting {
 }
 
 macro_rules! compile_one_cmd {
-    ( $param:ident, $file_name:ident, $c:ident, $cc:ident ) => {
-        if let Some(err) = $cc.cmd_compile($c, $param.get_pos()){
-            return Err(CE::new(err, $param.get_pos(), $file_name))
+    ( $parser:ident, $file_name:ident, $c:ident, $cc:ident ) => {
+        if let Some(err) = $cc.cmd_compile($c, $parser.get_pos()){
+            return Err(CE::new(err, $parser.get_pos(), $file_name))
         }
     }
 }
 
 macro_rules! compile_seq_cmd {
-    ( $param:ident, $file_name:ident, $str_cmds:ident, $cc:ident ) => {
+    ( $parser:ident, $file_name:ident, $str_cmds:ident, $cc:ident ) => {
         let seq_cmds = $str_cmds.chars();
-        for c in seq_cmds { compile_one_cmd!($param, $file_name, c, $cc) }
+        for c in seq_cmds { compile_one_cmd!($parser, $file_name, c, $cc) }
     }
 }
 
 macro_rules! compile_mem_init_if_need {
-    ( $option:ident, $param:ident, $file_name:ident, $ret:ident ) => {
+    ( $option:ident, $parser:ident, $file_name:ident, $ret:ident ) => {
         if let Some(mem_init_code) = $ret.set_code_start($option.mem_init_type) {
             let cc = $option.cmd_compiler.as_mut().unwrap();
-            compile_seq_cmd!($param, $file_name, mem_init_code, cc);
+            compile_seq_cmd!($parser, $file_name, mem_init_code, cc);
         }
     }
 }
+
+macro_rules! use_macros {
+    ( $option:ident, $parser:ident, $file_name:ident, $ret:ident, $macros_name:ident ) => {
+        let macros_code = $ret.get_macros_code(&$macros_name);
+        if macros_code.is_none() { return Err(CE::new_unknown_macros($parser.get_pos(), $file_name, $macros_name)) } 
+        let macros_code = macros_code.unwrap();
+        
+        let cc = $option.cmd_compiler.as_mut().unwrap();
+        compile_seq_cmd!($parser, $file_name, macros_code, cc);
+    }
+}
+
+// ---------------------------------------------------------------------
+// EXTEND CC:
+
+/*
+// macros more convenient & fast
+
+trait ExtendCC {
+    fn compile_one_cmd(&mut self, pos: CompilerPos, file_name: &str, c: char) -> Result<(), CE>;   
+    fn compile_seq_cmd(&mut self, pos: CompilerPos, file_name: &str, str_cmds: &str) -> Result<(), CE>;   
+}
+
+impl<T> ExtendCC for dyn CmdCompiler<T>
+{
+    fn compile_one_cmd(&mut self, pos: CompilerPos, file_name: &str, c: char) -> Result<(), CE> {
+        match self.cmd_compile(c, pos.clone()) {
+            Some(err) => Err(CE::new(err, pos, String::from(file_name))),
+            None => Ok(()),
+        }
+    }
+
+    fn compile_seq_cmd(&mut self, pos: CompilerPos, file_name: &str, str_cmds: &str) -> Result<(), CE> {
+        for c in str_cmds.chars() {
+            let cmd_result = self.compile_one_cmd(pos.clone(), file_name, c);
+            if cmd_result.is_err() { return cmd_result }
+        }
+        Ok(())
+    }  
+}
+*/
 
 // ---------------------------------------------------------------------
 // [+] PATH HELP FN:
@@ -344,19 +442,19 @@ where CC: CmdCompiler<T> + PortNameHandler,
     };
     let chars = code.chars();
 
-    let mut param = InnerCompilerParam::new(IterWithAutoBackN::<_, _, 1>::new(chars));
+    let mut parser = CompilerParser::new(IterWithAutoBackN::<_, _, 1>::new(chars));
 
     if option.need_processed_default_settings() {
-        compile_check_error_compile_settings!(option, param, file_name);
+        compile_check_error_compile_settings!(option, parser, file_name);
         for setting_string in option.get_default_settings() {
-            compile_prepare_setting!(option, param, file_name, ret, setting_string);
+            compile_prepare_setting!(option, parser, file_name, ret, setting_string);
         } 
     }
     if option.need_processed_default_settings() { panic!("[ALGO ERROR] never must be here") } 
 
 
     loop {
-        match param.next() {
+        match parser.next() {
             None => {
                 if option.can_compile_code() {
                     if option.cmd_compiler.as_ref().unwrap().need_port_name_handle() {
@@ -371,18 +469,18 @@ where CC: CmdCompiler<T> + PortNameHandler,
                 return Ok(ret)
             }
             Some(super::compiler::COMMENT_LINE) => { 
-                skip_line(&mut param); 
+                parser.skip_line(); 
             }
 
             Some(c) if c.is_whitespace() => { }
 
             Some(super::compiler::SHARP) => { 
-                match SharpParse::parse_sharp(&mut param, option.can_compile) {
-                    SharpParse::CantCompileMacro => return Err(CE::new_cant_compile_macros(param.get_pos(), file_name)),
-                    SharpParse::CantCompileSetting => return Err(CE::new_cant_compile_settings(param.get_pos(), file_name)),
-                    SharpParse::EmptyName => return Err(CE::new_empty_name(param.get_pos(), file_name)),
-                    SharpParse::UnexpectedEOF => return Err(CE::new_unexp_eof(param.get_pos(), file_name)),
-                    SharpParse::BadMacroName(bad_char) => return Err(CE::new_bad_macro_name(param.get_pos(), file_name, bad_char)),
+                match SharpParse::parse_sharp(&mut parser, option.can_compile) {
+                    SharpParse::CantCompileMacro => return Err(CE::new_cant_compile_macros(parser.get_pos(), file_name)),
+                    SharpParse::CantCompileSetting => return Err(CE::new_cant_compile_settings(parser.get_pos(), file_name)),
+                    SharpParse::EmptyName => return Err(CE::new_empty_name(parser.get_pos(), file_name)),
+                    SharpParse::UnexpectedEOF => return Err(CE::new_unexp_eof(parser.get_pos(), file_name)),
+                    SharpParse::BadMacroName(bad_char) => return Err(CE::new_bad_macro_name(parser.get_pos(), file_name, bad_char)),
                     SharpParse::Temp(_) => panic!("here must not be temp"),
                     SharpParse::FileInclude(include, can_compile) => {
                         let include_option = option.new_only(can_compile);
@@ -390,78 +488,96 @@ where CC: CmdCompiler<T> + PortNameHandler,
                         let include_compile = compile(include, include_option, include_inter_info);
 
                         let mut include_compile = if let Err(mut err) = include_compile { 
-                            err.add_err_pos(param.get_pos(), file_name);
+                            err.add_err_pos(parser.get_pos(), file_name);
                             return Err(err)
                         } else {
                             include_compile.ok().unwrap()
                         };
 
                         // [+] processing merge include
-                        if let Some((set_str, error_sar)) = ret.include_file_setting(&mut include_compile, &option, param.get_pos()) {
-                            return Err(CE::new_setting_action_error(param.get_pos(), file_name, error_sar, set_str))
+                        if let Some((set_str, error_sar)) = ret.include_file_setting(&mut include_compile, &option, parser.get_pos()) {
+                            return Err(CE::new_setting_action_error(parser.get_pos(), file_name, error_sar, set_str))
                         }
-                        if let Some(include_error) = ret.add_include_file(include_compile, param.get_pos()) {
-                            return Err(CE::new_include_error(param.get_pos(), file_name, include_error))
+                        if let Some(include_error) = ret.add_include_file(include_compile, parser.get_pos()) {
+                            return Err(CE::new_include_error(parser.get_pos(), file_name, include_error))
                         }
                         // [-] processing merge include
                     }
                     SharpParse::Macros{ macro_name, macro_cmds } => {
                         if !option.can_compile_macro() {
-                            return Err(CE::new_cant_compile_macros(param.get_pos(), file_name)) 
+                            return Err(CE::new_cant_compile_macros(parser.get_pos(), file_name)) 
                         }
 
                         if let Some(error) = option.mnc_check(&macro_name, &macro_cmds) {
-                            return Err(CE::new(error, param.get_pos(), file_name))
+                            return Err(CE::new(error, parser.get_pos(), file_name))
                         }
 
                         let macro_code = ret.macro_transform(macro_cmds);
                         let macro_code = if let Ok(macro_code) = macro_code { macro_code }
-                        else { return Err(CE::new_unknown_macros(param.get_pos(), file_name, macro_code.err().unwrap())) };
+                        else { return Err(CE::new_unknown_macros(parser.get_pos(), file_name, macro_code.err().unwrap())) };
 
                         if !ret.add_macro(macro_name, macro_code) {
-                            return Err(CE::new_already_defined(param.get_pos(), file_name))
+                            return Err(CE::new_already_defined(parser.get_pos(), file_name))
                         }
                     }
                 }
             }
 
             Some(super::compiler::SETTINGS_CHAR) => {
-                compile_check_error_compile_settings!(option, param, file_name);
+                compile_check_error_compile_settings!(option, parser, file_name);
 
-                let setting = parse_until_char(&mut param, super::compiler::SETTINGS_CHAR);
+                let setting = parser.parse_until_char(super::compiler::SETTINGS_CHAR);
                 let setting_string = 
                     if let Some(setting) = setting { setting } 
-                    else { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) };
+                    else { return Err(CE::new_unexp_eof(parser.get_pos(), file_name)) };
                 
-                compile_prepare_setting!(option, param, file_name, ret, setting_string);
+                compile_prepare_setting!(option, parser, file_name, ret, setting_string);
             }
 
             // ELSE: real code
             Some(c) => {
-                if !option.can_compile_code() { return Err(CE::new_cant_compile_code(param.get_pos(), file_name)) }
+                if !option.can_compile_code() { return Err(CE::new_cant_compile_code(parser.get_pos(), file_name)) }
 
                 // say that code started & compile mem init if need
-                compile_mem_init_if_need!(option, param, file_name, ret);
+                compile_mem_init_if_need!(option, parser, file_name, ret);
 
                 //currently real code is or `MACRO_USE` or `CMD`
                 match c {
                     // `MACRO_USE`
                     super::compiler::MACRO_USE_CHAR => {
-                        let macros_name = parse_until_char(&mut param, super::compiler::MACRO_USE_CHAR);
-                        if macros_name.is_none() { return Err(CE::new_unexp_eof(param.get_pos(), file_name)) }
-                        let macros_name = macros_name.unwrap();
-                        
-                        let macros_code = ret.get_macros_code(&macros_name);
-                        if macros_code.is_none() { return Err(CE::new_unknown_macros(param.get_pos(), file_name, macros_name)) } 
-                        let macros_code = macros_code.unwrap();
-                        
-                        let cc = option.cmd_compiler.as_mut().unwrap();
-                        compile_seq_cmd!(param, file_name, macros_code, cc);
+                        if let Some(super::compiler::MACRO_USE_CHAR) = parser.next() {
+                            // we await "%%%" and two '%' already readed
+                            ok_or_ret!(parser.await_sss_char(1, &file_name));
+
+                            'space_sep_seq: loop {
+                                match parser.parse_sss_next_name() {
+                                    ParseNextNameSSS::EOF => return Err(CE::new_expect_space_sep(parser.get_pos(), file_name, None)),
+                                    ParseNextNameSSS::WhiteSpace(macros_name) => {
+                                        use_macros!(option, parser, file_name, ret, macros_name);
+                                    }
+                                    ParseNextNameSSS::StartOfEndSeq(x) => {
+                                        if let Some(macros_name) = x { use_macros!(option, parser, file_name, ret, macros_name); }
+                                        break 'space_sep_seq
+                                    }
+                                }
+                            }
+
+                            // we await "%%%" and one '%' already readed
+                            ok_or_ret!(parser.await_sss_char(2, &file_name));
+                        } else {
+                            parser.back();
+                            
+                            let macros_name = parser.parse_until_char(super::compiler::MACRO_USE_CHAR);
+                            if macros_name.is_none() { return Err(CE::new_unexp_eof(parser.get_pos(), file_name)) }
+                            let macros_name = macros_name.unwrap();
+                            
+                            use_macros!(option, parser, file_name, ret, macros_name);
+                        }
                     }
                     // `CMD`
                     c => {
                         let cc = option.cmd_compiler.as_mut().unwrap();
-                        compile_one_cmd!(param, file_name, c, cc);      
+                        compile_one_cmd!(parser, file_name, c, cc);
                     }
                 }
             }

@@ -1,0 +1,23 @@
+;; include i-use-acr-btw macros
+;; and use it in space-separated-macros-call (all between %%%)
+;;
+;; so we run i-use-acr-btw code on bf-ext
+
+
+##!#include#    ; include "include.bf-ext" with macros & settings
+                ; so now we can use all i-use-arch-linux macros
+                ; also we connecting ascii-console
+
+
+;; https://github.com/overmighty/i-use-arch-btw/blob/master/examples/hello-world.archbtw
+%%% ; start use space-separated-macros-call
+linux the linux linux linux linux linux linux linux i arch use way i linux btw
+linux the linux i arch arch arch arch arch use way i arch arch btw arch arch
+arch arch arch arch arch btw btw arch arch arch btw the linux i arch arch arch
+arch arch use way i arch btw linux linux linux linux linux linux linux linux
+linux linux linux linux btw linux linux linux the linux i arch arch arch use way
+i btw linux the linux linux linux i arch use way i linux linux linux btw arch
+arch arch btw linux linux linux linux linux linux btw linux linux linux linux
+linux linux linux linux btw linux the linux linux linux i arch use way i btw
+the linux linux linux i arch use way i linux btw
+%%% ; end use space-separated-macros-call
