@@ -1,0 +1,66 @@
+'port-name:console:4'
+'dev[console]:num-console'
+
+#xx#+#
+
+#check_02_as_macro#
+%%%%%%
+
+
+%%% %%%
+
+
+%%%
+%%%
+
+
+%%%;%%%
+%%%
+
+
+%xx%%
+xx%
+
+
+%xx%%;
+xx%
+
+
+%xx%
+%xx%
+
+
+%;
+xx%
+
+
+%
+xx%
+
+%%%xx
+xx%%%
+
+
+%%%xx;%%% %%%
+xx xx%%%
+
+%%%xx;
+xx;
+xx;%%%
+%%%
+
+
+%xx%%%%xx
+xx%%%
+
+
+%%%   xx 
+xx 
+xx   
+xx %%%
+#
+
+
+%check_02_as_macro%
+.
+; OUT:23

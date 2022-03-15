@@ -19,6 +19,31 @@ where
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+/// struct that impl BackwardMove but supposed never back 
+pub struct IterPanicOnBack<I> { iter: I }
+
+impl<I> IterPanicOnBack<I> 
+where I: std::iter::Iterator
+{
+    pub fn new(iter: I) -> Self { Self { iter } }
+}
+
+impl<I> BackwardMove for IterPanicOnBack<I> 
+where I: std::iter::Iterator
+{
+    fn back(&mut self) { panic!("panic cause we cant use back on IterPanicOnBack") }
+}
+
+impl<I> Iterator for IterPanicOnBack<I>
+where
+    I: std::iter::Iterator
+{
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> { self.iter.next() }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 pub struct IterWithAutoBack<I, T>
 where
     T: Copy,

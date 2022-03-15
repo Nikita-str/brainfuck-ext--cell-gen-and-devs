@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use crate::bfcg::{vm::port::Port, dev_emulators::dev_name::DevName};
+use crate::bfcg::{vm::port::Port, dev_emulators::dev_name::DevName, iter_with_back::IterPanicOnBack};
 
 use super::{
     dif_part_helper::{settings::Setting, setting_action_result::SettingActionResult}, mem_init::MemInit, 
     compiler_warning::{CompilerWarnings, CompilerWarning}, comand_compiler::CmdCompiler, 
     compiler_option::{CompilerOption, MemInitType}, compiler_pos::CompilerPos, 
-    compiler_error::IncludeError, compiler_inter_info::CompilerInterInfo
+    compiler_error::IncludeError, compiler_inter_info::CompilerInterInfo, compiler::{CompilerParser, ParseNextNameSSS}
 };
 
 #[derive(Debug)]
@@ -104,23 +104,59 @@ impl<T> CompilerInfo<T>{
     /// * if all name known => Ok(macro_code (without inner calls))
     /// * else => Err(name of unknown macros)
     pub fn macro_transform(&self, macro_init_code: String) -> Result<String, String> {
+        // TODO: Err type
         let mut macro_code = String::new();
 
-        let macro_splited: Vec<&str> = macro_init_code.split('%').collect();
-        let mut part_is_macro_name = false;
+        let sss_splited = macro_init_code.split("%%%");
+        let mut part_is_sss = false;
 
-        for code_part in macro_splited {
-            if !part_is_macro_name {
-                macro_code += code_part;
+        for sss_part in sss_splited {
+            if part_is_sss {
+                let mut part_parser = CompilerParser::new(IterPanicOnBack::new(sss_part.chars()));
+
+                loop {
+                    match part_parser.parse_sss_next_name() {
+                        // any '%' is error we already between '%%%'
+                        ParseNextNameSSS::StartOfEndSeq(x) => return Err(if let Some(x) = x { x } else { "".to_owned() }),
+                        ParseNextNameSSS::WhiteSpace(macro_name) => {
+                            let code_part = self.get_macros_code(&macro_name);
+                            if code_part.is_none() { return Err(macro_name) }
+                            macro_code += code_part.unwrap();
+                        }
+                        ParseNextNameSSS::EOF(macro_name) => {
+                            if let Some(macro_name) = macro_name {
+                                let code_part = self.get_macros_code(&macro_name);
+                                if code_part.is_none() { return Err(macro_name) }
+                                macro_code += code_part.unwrap();
+                            }
+                            break
+                        }
+                    }
+                }
             } else {
-                let name = code_part;
-                let code_part = self.get_macros_code(name);
-                if code_part.is_none() { return Err(name.to_owned()) } 
-                macro_code += code_part.unwrap();
+                let sss_part: String = sss_part.chars().filter(|x|!x.is_whitespace()).collect();
+                let macro_splited = sss_part.split('%');
+                let mut part_is_macro_name = false;
+                
+                for code_part in macro_splited {
+                    if !part_is_macro_name {
+                        macro_code += code_part;
+                    } else {
+                        let name = code_part;
+                        let code_part = self.get_macros_code(name);
+                        if code_part.is_none() { return Err(name.to_owned()) } 
+                        macro_code += code_part.unwrap();
+                    }
+                    part_is_macro_name = !part_is_macro_name;
+                }
+
+                if !part_is_macro_name { return  Err("TYPE: not closed '%'".to_owned()) } // TODO: TYPE: NOT CLOSED '%' 
             }
-            part_is_macro_name = !part_is_macro_name;
+
+            part_is_sss = !part_is_sss;
         }
 
+        if !part_is_sss { return  Err("TYPE: not closed '%%%'".to_owned()) } // TODO: TYPE: NOT CLOSED '%%%' 
         Ok(macro_code)
     }
 

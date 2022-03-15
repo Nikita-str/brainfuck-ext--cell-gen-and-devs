@@ -1,0 +1,38 @@
+'port-name:console:4'
+'dev[console]:num-console'
+
+#xx#+#
+
+; +2
+#AAA#
+    %%% 
+    xx
+    xx
+    %%%
+#
+
+; +8
+#BBB#
+    %%% 
+    xx;
+    AAA
+    AAA;+2
+    %%%
+    % xx;yy
+%% AAA %
+#
+
+;+17
+#C#
+    %AAA%
+    %%%AAA%%%
+    %%%%%%
+    %xx%
+    %%%AAA
+    BBB
+    xx xx%%%
+#
+
+%C%
+.
+;OUT:17

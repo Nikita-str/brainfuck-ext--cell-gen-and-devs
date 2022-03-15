@@ -18,7 +18,7 @@ fn compiler_test_error_01(){
         if let CompilerErrorType::ClosedWhileWithoutOpen = x.err_type {  
             let stack = x.err_stack_pos;
             assert_eq!(stack.len(), 1);
-            assert_eq!(stack[0].pos, Some(CompilerPos{ line:5, symb: 9 }));
+            assert_eq!(stack[0].pos, Some(CompilerPos{ line:5, symb: 9, blocked_pos: 0 }));
         }
         else { panic!("must be CET::ClosedWhileWithoutOpen") }
     } else { panic!("must be error!") }

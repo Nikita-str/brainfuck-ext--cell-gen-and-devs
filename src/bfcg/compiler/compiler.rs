@@ -48,6 +48,7 @@ pub fn file_minimalize(str: &str) -> Result<String, ()>{
 // ---------------------------------------------------------------------
 // (inner) STRUCT: 
 
+pub(in super)
 struct CompilerParser<CharsWithBack>
 where 
     CharsWithBack: Iterator<Item = char> + BackwardMove,
@@ -99,7 +100,7 @@ where
         Ok(())
     }
 
-    fn skip_line(&mut self) {
+    pub fn skip_line(&mut self) {
         loop {
             match self.next() {
                 Some(super::compiler::NEXT_LINE) | None => break,
@@ -108,7 +109,7 @@ where
         }
     }
 
-    fn parse_until_char(&mut self, until_char: char) -> Option<String> {
+    pub fn parse_until_char(&mut self, until_char: char) -> Option<String> {
         let mut ret_str = String::new();
 
         loop {
@@ -117,6 +118,25 @@ where
                 Some(super::compiler::COMMENT_LINE) => self.skip_line(),
                 Some(c) if c == until_char => { break },
                 Some(c) if c.is_whitespace() => { },
+                Some(c) => { ret_str.push(c); },
+            };
+        }
+        
+        Some(ret_str)
+    }
+    
+    #[allow(unused)]
+    pub fn parse_until_char_with_save_space(&mut self, until_char: char) -> Option<String> {
+        let mut ret_str = String::new();
+
+        loop {
+            match self.next() {
+                None => { return None }
+                Some(super::compiler::COMMENT_LINE) => { 
+                    ret_str.push(super::compiler::NEXT_LINE); 
+                    self.skip_line(); 
+                }
+                Some(c) if c == until_char => { break },
                 Some(c) => { ret_str.push(c); },
             };
         }
@@ -132,7 +152,10 @@ pub(super) const MACRO_USE_CHAR: char = '%';
 pub(super) const SETTINGS_CHAR: char = '\'';
 pub(super) const COMMENT_LINE: char = ';';
 pub(super) const NEXT_LINE: char = '\n';
+pub(super) const DEFAULT_SPACE: char = ' ';
 pub(super) const SHARP: char = '#';
+
+pub(super) const SSS_CHAR_LEN: usize = 3;
 
 type CE = CompilerError;
 
@@ -144,8 +167,11 @@ type CE = CompilerError;
 // general form:
 // <%%%>[<possible-space><possible-names>]*<possible-space><%%%>
 
+pub(in super)
 enum ParseNextNameSSS {
-    EOF,
+    /// End Of File
+    /// if Some(code_name) => before EOF was macro name, need when parse not full file
+    EOF(Option<String>),
     WhiteSpace(String),
     StartOfEndSeq(Option<String>),
 }
@@ -154,12 +180,15 @@ impl<CharsWithBack> CompilerParser<CharsWithBack>
 where
     CharsWithBack: Iterator<Item = char> + BackwardMove,
 {
-    fn parse_sss_next_name(&mut self) -> ParseNextNameSSS {
+    pub fn parse_sss_next_name(&mut self) -> ParseNextNameSSS {
         let mut ret_str = String::new();
 
         loop {
             match self.next() {
-                None => { return ParseNextNameSSS::EOF }
+                None => {
+                    let ret = if !ret_str.is_empty() { Some(ret_str) } else { None };
+                    return ParseNextNameSSS::EOF(ret) 
+                }
                 Some(super::compiler::COMMENT_LINE) => {
                     self.skip_line();
                     if !ret_str.is_empty() { return ParseNextNameSSS::WhiteSpace(ret_str) }
@@ -225,6 +254,73 @@ impl SharpParse{
         else { SharpParse::Temp(ret_str) }
     }
 
+    fn parse_macro_code<C>(parser: &mut CompilerParser<C>) -> SharpParse
+    where 
+        C: Iterator<Item = char> + BackwardMove,
+    {
+        let mut code_str = String::new();
+
+        let mut now_macro_use = false;
+        let mut now_sss = false;
+        let mut was_sss_space = false;
+        let mut macro_use_chars_in_a_row = 0;
+        let mut prev_macro_use_chars_in_a_row = 0;
+
+        loop {
+            if macro_use_chars_in_a_row > 0 && macro_use_chars_in_a_row == prev_macro_use_chars_in_a_row {
+                //code_str.push(super::compiler::DEFAULT_SPACE); // *0
+                if !now_sss && macro_use_chars_in_a_row == 1 { now_macro_use = true; }
+                if macro_use_chars_in_a_row == 2 { code_str.push(super::compiler::DEFAULT_SPACE); } // instead *0
+                macro_use_chars_in_a_row = 0;
+            }
+            prev_macro_use_chars_in_a_row = macro_use_chars_in_a_row;
+
+            match parser.next() {
+                None => { return SharpParse::UnexpectedEOF }
+
+                Some(super::compiler::COMMENT_LINE) => {
+                    if now_sss && !was_sss_space {
+                        was_sss_space = true; 
+                        code_str.push(super::compiler::DEFAULT_SPACE); 
+                    }
+                    parser.skip_line();
+                }
+
+                Some(super::compiler::SHARP) => { break }
+
+                Some(c) if c == super::compiler::MACRO_USE_CHAR => {
+                    code_str.push(c);
+                    macro_use_chars_in_a_row += 1;
+                    if now_macro_use {
+                        code_str.push(super::compiler::DEFAULT_SPACE);
+                        now_macro_use = false;
+                        macro_use_chars_in_a_row = 0;
+                    } else if macro_use_chars_in_a_row == SSS_CHAR_LEN {
+                        code_str.push(super::compiler::DEFAULT_SPACE); // only for convenience (when test)
+                        now_sss = !now_sss;
+                        was_sss_space = true; // may be any
+                        macro_use_chars_in_a_row = 0;
+                    }
+                }
+
+                Some(c) if c.is_whitespace() => {
+                    if now_sss && !was_sss_space {
+                        was_sss_space = true; 
+                        code_str.push(super::compiler::DEFAULT_SPACE); 
+                    }
+                }
+
+                Some(c) => {
+                    was_sss_space = false;
+                    code_str.push(c); 
+                }
+            };
+        }
+
+        SharpParse::Temp(code_str)
+    }
+
+
     fn parse_sharp<C>(parser: &mut CompilerParser<C>, can_compile: CanCompile) -> SharpParse
     where 
         C: Iterator<Item = char> + BackwardMove,
@@ -270,7 +366,7 @@ impl SharpParse{
             return SharpParse::BadMacroName(super::compiler::MACRO_USE_CHAR) 
         }
 
-        let macro_cmds = Self::parse_until_sharp(parser);
+        let macro_cmds = Self::parse_macro_code(parser);
         let macro_cmds =
         if !macro_cmds.is_temp() { return macro_cmds } 
         else { macro_cmds.temp_to_string().unwrap() };
@@ -551,7 +647,7 @@ where CC: CmdCompiler<T> + PortNameHandler,
 
                             'space_sep_seq: loop {
                                 match parser.parse_sss_next_name() {
-                                    ParseNextNameSSS::EOF => return Err(CE::new_expect_space_sep(parser.get_pos(), file_name, None)),
+                                    ParseNextNameSSS::EOF(_) => return Err(CE::new_expect_space_sep(parser.get_pos(), file_name, None)),
                                     ParseNextNameSSS::WhiteSpace(macros_name) => {
                                         use_macros!(option, parser, file_name, ret, macros_name);
                                     }
