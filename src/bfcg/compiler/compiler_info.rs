@@ -6,7 +6,7 @@ use super::{
     dif_part_helper::{settings::Setting, setting_action_result::SettingActionResult}, mem_init::MemInit, 
     compiler_warning::{CompilerWarnings, CompilerWarning}, comand_compiler::CmdCompiler, 
     compiler_option::{CompilerOption, MemInitType}, compiler_pos::CompilerPos, 
-    compiler_error::IncludeError, compiler_inter_info::CompilerInterInfo, compiler::{CompilerParser, ParseNextNameSSS}
+    compiler_error::{IncludeError, CompilerErrorType}, compiler_inter_info::CompilerInterInfo, compiler::{CompilerParser, ParseNextNameSSS}
 };
 
 #[derive(Debug)]
@@ -103,7 +103,7 @@ impl<T> CompilerInfo<T>{
     /// ## Result
     /// * if all name known => Ok(macro_code (without inner calls))
     /// * else => Err(name of unknown macros)
-    pub fn macro_transform(&self, macro_init_code: String) -> Result<String, String> {
+    pub fn macro_transform(&self, macro_init_code: String) -> Result<String, MacroCodeProcessError> {
         // TODO: Err type
         let mut macro_code = String::new();
 
@@ -116,17 +116,17 @@ impl<T> CompilerInfo<T>{
 
                 loop {
                     match part_parser.parse_sss_next_name() {
-                        // any '%' is error we already between '%%%'
-                        ParseNextNameSSS::StartOfEndSeq(x) => return Err(if let Some(x) = x { x } else { "".to_owned() }),
+                        // any '%' is error when we already between '%%%'
+                        ParseNextNameSSS::StartOfEndSeq(_) => return Err(MacroCodeProcessError::WrongAmountOfSpaceSepSeqChar),
                         ParseNextNameSSS::WhiteSpace(macro_name) => {
                             let code_part = self.get_macros_code(&macro_name);
-                            if code_part.is_none() { return Err(macro_name) }
+                            if code_part.is_none() { return Err(MacroCodeProcessError::UnknownMacro(macro_name)) }
                             macro_code += code_part.unwrap();
                         }
                         ParseNextNameSSS::EOF(macro_name) => {
                             if let Some(macro_name) = macro_name {
                                 let code_part = self.get_macros_code(&macro_name);
-                                if code_part.is_none() { return Err(macro_name) }
+                                if code_part.is_none() { return Err(MacroCodeProcessError::UnknownMacro(macro_name)) }
                                 macro_code += code_part.unwrap();
                             }
                             break
@@ -144,27 +144,27 @@ impl<T> CompilerInfo<T>{
                     } else {
                         let name = code_part;
                         let code_part = self.get_macros_code(name);
-                        if code_part.is_none() { return Err(name.to_owned()) } 
+                        if code_part.is_none() { return Err(MacroCodeProcessError::UnknownMacro(name.to_owned())) } 
                         macro_code += code_part.unwrap();
                     }
                     part_is_macro_name = !part_is_macro_name;
                 }
 
-                if !part_is_macro_name { return  Err("TYPE: not closed '%'".to_owned()) } // TODO: TYPE: NOT CLOSED '%' 
+                if !part_is_macro_name { return Err(MacroCodeProcessError::NotClosedMacroUse) }
             }
 
             part_is_sss = !part_is_sss;
         }
 
-        if !part_is_sss { return  Err("TYPE: not closed '%%%'".to_owned()) } // TODO: TYPE: NOT CLOSED '%%%' 
+        if !part_is_sss { return Err(MacroCodeProcessError::NotClosedSpaceSepSeq) }
         Ok(macro_code)
     }
 
     /// ## Result
     /// * if cant self.add_macro => false
     /// * else => true 
-    fn can_add_macro(&self, macro_name: &str) -> bool { !self.macros.contains_key(macro_name) }
-
+    pub fn can_add_macro(&self, macro_name: &str) -> bool { !self.macros.contains_key(macro_name) }
+    
     pub fn add_macro(&mut self, macro_name: String, macro_cmds: String) -> bool {
         if self.macros.contains_key(&macro_name) { false }
         else {  
@@ -261,5 +261,25 @@ impl<T> CompilerInfo<T>{
             }
         } 
         None 
+    }
+}
+
+
+pub enum MacroCodeProcessError {
+    /// use `%` between `%%%`: any use of `%` is invalid between `%%%`
+    WrongAmountOfSpaceSepSeqChar,
+    UnknownMacro(String),
+    NotClosedMacroUse,
+    NotClosedSpaceSepSeq,
+}
+
+impl ToString for MacroCodeProcessError {
+    fn to_string(&self) -> String {
+        match self {
+            Self::WrongAmountOfSpaceSepSeqChar => String::from("use `%` in space-separated-macro-use-code(between `%%%`)"),
+            Self::UnknownMacro(x) => CompilerErrorType::UnknownMacros(x.clone()).to_string(),
+            Self::NotClosedMacroUse => String::from("macro-use (`%`) not closed"),
+            Self::NotClosedSpaceSepSeq => String::from("space-separated-seq (`%%%`) not closed"),
+        }
     }
 }

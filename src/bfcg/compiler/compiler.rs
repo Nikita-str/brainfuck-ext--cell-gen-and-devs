@@ -609,12 +609,13 @@ where CC: CmdCompiler<T> + PortNameHandler,
                         }
 
                         let macro_code = ret.macro_transform(macro_cmds);
-                        let macro_code = if let Ok(macro_code) = macro_code { macro_code }
-                        else { return Err(CE::new_unknown_macros(parser.get_pos(), file_name, macro_code.err().unwrap())) };
+                        let macro_code = match macro_code {
+                            Ok(x) => x,
+                            Err(err) => return Err(CE::new_macro_code_process_error(parser.get_pos(), file_name, err)), 
+                        };
 
-                        if !ret.add_macro(macro_name, macro_code) {
-                            return Err(CE::new_already_defined(parser.get_pos(), file_name))
-                        }
+                        if !ret.can_add_macro(&macro_name) { return Err(CE::new_already_defined(parser.get_pos(), file_name, macro_name)) }
+                        if !ret.add_macro(macro_name, macro_code) { panic!("must be added") }
                     }
                 }
             }

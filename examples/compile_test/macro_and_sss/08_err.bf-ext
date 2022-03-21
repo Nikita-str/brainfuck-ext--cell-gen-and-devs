@@ -1,0 +1,24 @@
+#xx# + #
+
+#y#
+%%%
+xx
+%%%
+
+% xx   ; NOT CLOSED `%`
+#
+
+
+; HERE WILL NOT WORK:
+  ; #z#
+  ; % xx   ; NOT CLOSED `%`
+  ; %%%
+  ; xx
+  ; %%%
+  ; #
+; CAUSE IT EQ: #z# %xx% %% xx %%% #
+;                  ----
+;                   ^
+;                   |
+;               AMBIGUITY 
+;
